@@ -97,15 +97,22 @@ function detectCycleDays(tasks: any[]): number | null {
 }
 
 function shiftTasksFromDate(tasks: any[], fromDate: string, hours: number): any[] {
-  const from = new Date(fromDate).getTime();
-  const shiftMs = hours * 60 * 60 * 1000;
+  // Convert hours to whole days (minimum 1 day) — task dates are date-only strings,
+  // so sub-day shifts have no visible effect.
+  const shiftDays = Math.max(1, Math.round(hours / 8));
+  const shiftMs = shiftDays * 24 * 60 * 60 * 1000;
+  // Strip time component from fromDate for a clean date-only comparison
+  const fromDateOnly = fromDate.split("T")[0];
   return tasks.map(t => {
-    const s = t.start ? new Date(t.start).getTime() : null;
-    if (!s || s < from) return t;
+    if (!t.start) return t;
+    // Compare date strings directly (YYYY-MM-DD) — avoids UTC/local timezone issues
+    if (t.start < fromDateOnly) return t;
     return {
       ...t,
-      start: new Date(s + shiftMs).toISOString().split("T")[0],
-      finish: t.finish ? new Date(new Date(t.finish).getTime() + shiftMs).toISOString().split("T")[0] : t.finish,
+      start: new Date(new Date(t.start).getTime() + shiftMs).toISOString().split("T")[0],
+      finish: t.finish
+        ? new Date(new Date(t.finish).getTime() + shiftMs).toISOString().split("T")[0]
+        : t.finish,
     };
   });
 }
@@ -303,7 +310,7 @@ export function registerRoutes(app: Express) {
     const cycle = detectCycleDays(tasks);
     const prog = storage.createProgramme({
       projectId: parseInt(req.params.id),
-      label: label || `Upload ${new Date().toLocaleDateString("en-AU")}`,
+      label: label || `Upload ${new Date().toLocaleDateString("en-AU", { timeZone: "Australia/Brisbane" })}`,
       type: type || "baseline",
       xmlData: xml,
       tasksJson: JSON.stringify(tasks),

@@ -182,9 +182,9 @@ export default function DashboardPage() {
                   {(p.startDate || p.endDate) && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <CalendarDays className="h-3 w-3" />
-                      {p.startDate && new Date(p.startDate).toLocaleDateString("en-AU")}
+                      {p.startDate && new Date(p.startDate).toLocaleDateString("en-AU", { timeZone: "Australia/Brisbane" })}
                       {p.startDate && p.endDate && " – "}
-                      {p.endDate && new Date(p.endDate).toLocaleDateString("en-AU")}
+                      {p.endDate && new Date(p.endDate).toLocaleDateString("en-AU", { timeZone: "Australia/Brisbane" })}
                     </div>
                   )}
                   <Badge

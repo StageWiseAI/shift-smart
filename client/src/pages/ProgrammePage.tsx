@@ -34,14 +34,16 @@ interface Task {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+const TZ = "Australia/Brisbane";
+
 function fmtDate(d?: string | null) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: TZ });
 }
 
 function fmtShort(d?: string | null) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  return new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short", timeZone: TZ });
 }
 
 function daysBetween(a?: string | null, b?: string | null): number | null {
@@ -51,7 +53,7 @@ function daysBetween(a?: string | null, b?: string | null): number | null {
 
 function weekLabel(weekStart: Date) {
   const end = new Date(weekStart.getTime() + 6 * 86400000);
-  return `Week of ${weekStart.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}`;
+  return `Week of ${weekStart.toLocaleDateString("en-AU", { day: "numeric", month: "short", timeZone: TZ })} – ${end.toLocaleDateString("en-AU", { day: "numeric", month: "short", timeZone: TZ })}`;
 }
 
 function addDays(date: Date, days: number) {
@@ -847,23 +849,44 @@ export default function ProgrammePage() {
                     <CloudRain className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     <p className="text-sm">No delays recorded yet</p>
                   </div>
-                ) : (eotEvents.data ?? []).map((e: any) => (
-                  <Card key={e.id}>
-                    <CardContent className="py-3 px-4 flex items-center gap-4">
-                      <div className={cn("p-2 rounded-lg", e.type === "weather" ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600")}>
-                        <CloudRain className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{e.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {e.delayHours}h delay from {fmtDate(e.applied_from)} · {e.type === "weather" ? "Weather Event" : "IR Event"}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-xs">{e.type === "weather" ? "Weather" : "IR"}</Badge>
-                      <span className="text-xs text-muted-foreground">{fmtDate(e.created_at)}</span>
-                    </CardContent>
-                  </Card>
-                ))}
+                ) : (eotEvents.data ?? []).map((e: any) => {
+                  const typeLabel = e.type === "weather" ? "Bad Weather" : e.type === "ir" ? "IR Event" : "Other";
+                  const hours = e.delay_hours ?? e.delayHours;
+                  const days = Math.max(1, Math.round(hours / 8));
+                  return (
+                    <Card
+                      key={e.id}
+                      className="cursor-pointer hover:border-primary/40 transition-colors"
+                      onClick={() => {
+                        // Reconstruct result view from stored data
+                        const baseTasks = taskData?.tasks ?? [];
+                        const adjusted = JSON.parse(e.adjusted_tasks_json ?? "[]");
+                        setEotResult({
+                          original: baseTasks,
+                          adjusted,
+                          delayHours: hours,
+                          appliedFrom: e.applied_from,
+                          description: e.description,
+                        });
+                        setTab("eot-result");
+                      }}
+                    >
+                      <CardContent className="py-3 px-4 flex items-center gap-4">
+                        <div className={cn("p-2 rounded-lg shrink-0", e.type === "weather" ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600")}>
+                          <CloudRain className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{e.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {days === 1 ? "Half day (4h)" : `${days} day${days > 1 ? "s" : ""} (${hours}h)`} delay from {fmtDate(e.applied_from)}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-xs shrink-0">{typeLabel}</Badge>
+                        <span className="text-xs text-muted-foreground shrink-0">{fmtDate(e.created_at)}</span>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </TabsContent>
 

@@ -34,7 +34,7 @@ export default function MeetingsPage() {
   const meetingId = mid ? parseInt(mid) : null;
 
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ title: "", meetingDate: new Date().toISOString().split("T")[0], meetingTime: "", type: "general" });
+  const [newForm, setNewForm] = useState({ title: "", meetingDate: new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Brisbane" }), meetingTime: "", type: "general" });
   const [newAttendee, setNewAttendee] = useState("");
   const [recording, setRecording] = useState(false);
   const [audioChunks, setAudioChunks] = useState<BlobPart[]>([]);
@@ -190,7 +190,7 @@ export default function MeetingsPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{m.title}</p>
                       <p className="text-xs text-muted-foreground">
-                        {m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : ""}{m.meeting_time ? ` · ${m.meeting_time}` : ""}
+                        {m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "Australia/Brisbane" }) : ""}{m.meeting_time ? ` · ${m.meeting_time}` : ""}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -281,7 +281,7 @@ export default function MeetingsPage() {
               />
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <p className="text-sm text-muted-foreground">
-                  {m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : ""}
+                  {m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Australia/Brisbane" }) : ""}
                   {m.meeting_time ? ` · ${m.meeting_time}` : ""}
                 </p>
                 <Badge variant="outline" className="text-[10px]">{typeLabel}</Badge>
@@ -409,7 +409,7 @@ export default function MeetingsPage() {
                       <p>{a.item}</p>
                       <div className="flex gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
                         {a.owner && <span>Owner: {a.owner}</span>}
-                        {a.due && <span>Due: {new Date(a.due).toLocaleDateString("en-AU")}</span>}
+                        {a.due && <span>Due: {new Date(a.due).toLocaleDateString("en-AU", { timeZone: "Australia/Brisbane" })}</span>}
                       </div>
                     </div>
                     <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground flex-shrink-0" onClick={() => removeAction(a.id)}>

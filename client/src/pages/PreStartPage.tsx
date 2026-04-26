@@ -189,7 +189,7 @@ export default function PreStartPage() {
   const meetingId = mid ? parseInt(mid) : null;
 
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ title: "", meetingDate: new Date().toISOString().split("T")[0] });
+  const [newForm, setNewForm] = useState({ title: "", meetingDate: new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Brisbane" }) });
   const [showClose, setShowClose] = useState(false);
   const [attendeeForm, setAttendeeForm] = useState({ name: "", company: "", role: "" });
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -404,7 +404,7 @@ export default function PreStartPage() {
                   <div className="p-2 bg-amber-50 text-amber-700 rounded-lg"><HardHat className="h-4 w-4" /></div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{m.title}</p>
-                    <p className="text-xs text-muted-foreground">{m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : ""}</p>
+                    <p className="text-xs text-muted-foreground">{m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "Australia/Brisbane" }) : ""}</p>
                   </div>
                   <Badge variant={m.status === "closed" ? "secondary" : "outline"} className="text-[10px] shrink-0">
                     {m.status === "closed" ? "Closed" : "Draft"}
@@ -484,7 +484,7 @@ export default function PreStartPage() {
               )}
               <div className="flex items-center gap-2 mt-1">
                 <p className="text-sm text-muted-foreground">
-                  {m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : ""}
+                  {m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Australia/Brisbane" }) : ""}
                 </p>
                 <Badge variant={isClosed ? "secondary" : "outline"} className="text-[10px]">
                   {isClosed ? <><Lock className="h-2.5 w-2.5 mr-1" />Closed</> : "Draft"}

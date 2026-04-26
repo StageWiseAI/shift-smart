@@ -78,7 +78,7 @@ function EmailCard({ email, projectId }: { email: EmailRecord; projectId: number
   const displaySubject = email.subject ?? "(No subject detected)";
   const displayFrom = email.from_address ?? "Unknown sender";
   const displayDate = email.received_date
-    ? new Date(email.received_date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+    ? new Date(email.received_date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "Australia/Brisbane" })
     : null;
 
   return (

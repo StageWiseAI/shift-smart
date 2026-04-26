@@ -12,21 +12,31 @@ import {
 } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+const TZ = "Australia/Brisbane";
+
 function fmt(date: string | null | undefined) {
   if (!date) return null;
-  return new Date(date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: TZ });
 }
 
 function fmtShort(date: string | null | undefined) {
   if (!date) return "—";
-  return new Date(date).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  return new Date(date).toLocaleDateString("en-AU", { day: "numeric", month: "short", timeZone: TZ });
+}
+
+/** Returns a Date object representing midnight Brisbane time (as a UTC ms value). */
+function brisbaneMidnight(): Date {
+  const now = new Date();
+  const brisbaneStr = now.toLocaleDateString("en-AU", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+  // en-AU returns dd/mm/yyyy
+  const [dd, mm, yyyy] = brisbaneStr.split("/");
+  return new Date(`${yyyy}-${mm}-${dd}T00:00:00+10:00`);
 }
 
 function daysUntil(date: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
+  const today = brisbaneMidnight();
+  // date is YYYY-MM-DD from programme; treat as Brisbane midnight
+  const d = new Date(`${date}T00:00:00+10:00`);
   return Math.round((d.getTime() - today.getTime()) / 86400000);
 }
 
@@ -84,8 +94,7 @@ export default function ProjectPage() {
   const allTasks = taskData?.tasks ?? [];
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = brisbaneMidnight();
   const in7 = new Date(today.getTime() + 7 * 86400000);
   const in30 = new Date(today.getTime() + 30 * 86400000);
 

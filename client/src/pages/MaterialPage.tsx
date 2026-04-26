@@ -158,7 +158,7 @@ export default function MaterialPage() {
             {sortedDates.map(date => (
               <div key={date}>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  {date === "Unscheduled" ? "Unscheduled" : new Date(date + "T00:00").toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })}
+                  {date === "Unscheduled" ? "Unscheduled" : new Date(date + "T00:00").toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", timeZone: "Australia/Brisbane" })}
                 </p>
                 <div className="space-y-2">
                   {grouped[date].map((d: any) => {

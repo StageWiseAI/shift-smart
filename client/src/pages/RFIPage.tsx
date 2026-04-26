@@ -123,7 +123,7 @@ function RfiCard({
   });
 
   const createdDate = rfi.created_at
-    ? new Date(rfi.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+    ? new Date(rfi.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "Australia/Brisbane" })
     : null;
 
   return (

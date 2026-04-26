@@ -164,7 +164,7 @@ export default function AdminPage() {
                   ) : filteredAudit.slice(0, 200).map((e: any) => (
                     <tr key={e.id} className="border-t border-border/50 hover:bg-muted/20">
                       <td className="py-1.5 px-3 text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(e.created_at).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(e.created_at).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Australia/Brisbane" })}
                       </td>
                       <td className="py-1.5 px-3 text-xs">{e.user_email}</td>
                       <td className="py-1.5 px-3">
