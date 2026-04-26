@@ -92,10 +92,11 @@ export default function ProgrammePage() {
 
   const eotEvents = useQuery<any[]>({ queryKey: [`/api/projects/${pid}/eot`] });
 
-  // Upload
+  // Upload — send as multipart FormData to avoid JSON body size limits
   const uploadMut = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", `/api/projects/${pid}/programmes/upload`, data),
-    onSuccess: (d) => {
+    mutationFn: (formData: FormData) =>
+      apiRequest("POST", `/api/projects/${pid}/programmes/upload`, formData),
+    onSuccess: (d: any) => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/programmes`] });
       setSelectedProgId(d.id);
       toast({ title: "Programme uploaded", description: `Cycle detected: ${d.cycleDetected ? `${d.cycleDetected} days` : "not detected"}` });
@@ -107,12 +108,11 @@ export default function ProgrammePage() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const xml = ev.target?.result as string;
-      uploadMut.mutate({ xml, label: uploadLabel || file.name, type: uploadType });
-    };
-    reader.readAsText(file);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("label", uploadLabel || file.name);
+    formData.append("type", uploadType);
+    uploadMut.mutate(formData);
     e.target.value = "";
   }
 

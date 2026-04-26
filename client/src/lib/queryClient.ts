@@ -25,8 +25,10 @@ export async function apiRequest(
   body?: any,
   extraHeaders?: Record<string, string>
 ) {
+  const isFormData = body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    // Don't set Content-Type for FormData — browser sets it with boundary automatically
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(extraHeaders ?? {}),
   };
   if (_userId) headers["x-user-id"] = _userId;
@@ -35,7 +37,7 @@ export async function apiRequest(
   const res = await fetch(url, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? (isFormData ? body : JSON.stringify(body)) : undefined,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));

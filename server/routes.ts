@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
+import multer from "multer";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function parseXMLTasks(xml: string): any[] {
@@ -272,8 +275,24 @@ export function registerRoutes(app: Express) {
     res.json(programmes.map(p => ({ ...p, xmlData: undefined, tasksJson: undefined })));
   });
 
-  app.post("/api/projects/:id/programmes/upload", requireAuth, (req: any, res) => {
-    const { xml, label, type } = req.body;
+  app.post("/api/projects/:id/programmes/upload", requireAuth, upload.single("file"), (req: any, res) => {
+    // Accept either multipart file upload OR legacy JSON body
+    let xml: string | undefined;
+    let label: string | undefined;
+    let type: string | undefined;
+
+    if (req.file) {
+      // Multipart upload (preferred — no size issues)
+      xml = req.file.buffer.toString("utf-8");
+      label = req.body.label;
+      type = req.body.type;
+    } else {
+      // Legacy JSON body fallback
+      xml = req.body.xml;
+      label = req.body.label;
+      type = req.body.type;
+    }
+
     if (!xml) return res.status(400).json({ error: "XML data required" });
     const tasks = parseXMLTasks(xml);
     const cycle = detectCycleDays(tasks);
