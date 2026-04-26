@@ -12,41 +12,75 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Upload, CloudRain, RefreshCw, Eye, Calendar, AlertTriangle, CheckCircle2, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Upload, CloudRain, RefreshCw, Eye, AlertTriangle, CheckCircle2,
+  Loader2, Printer, Calendar, ChevronRight, ArrowRight, TrendingDown, TrendingUp
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// ── Types ────────────────────────────────────────────────────────────────────
 interface Task {
   uid: string;
   name: string;
   start?: string;
   finish?: string;
+  percentComplete?: number;
   isMilestone?: boolean;
   isSummary?: boolean;
   outlineLevel?: number;
+  isCritical?: boolean;
 }
 
-function formatDate(d?: string) {
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function fmtDate(d?: string | null) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function fmtShort(d?: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+}
+
+function daysBetween(a?: string | null, b?: string | null): number | null {
+  if (!a || !b) return null;
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+}
+
+function weekLabel(weekStart: Date) {
+  const end = new Date(weekStart.getTime() + 6 * 86400000);
+  return `Week of ${weekStart.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}`;
+}
+
+function addDays(date: Date, days: number) {
+  return new Date(date.getTime() + days * 86400000);
+}
+
+// ── Plain task table row ─────────────────────────────────────────────────────
 function TaskRow({ task, depth }: { task: Task; depth: number }) {
   return (
-    <tr className={cn("border-b border-border/50 hover:bg-muted/30 transition-colors",
-      task.isSummary && "bg-muted/40 font-medium",
-      task.isMilestone && "bg-amber-50/60 dark:bg-amber-950/30"
+    <tr className={cn(
+      "border-b border-border/40 hover:bg-muted/20 transition-colors",
+      task.isSummary && "bg-muted/30 font-medium",
+      task.isMilestone && "bg-amber-50/60 dark:bg-amber-950/20",
     )}>
-      <td className="py-1.5 px-3 text-sm" style={{ paddingLeft: `${12 + depth * 16}px` }}>
+      <td className="py-1.5 px-3 text-sm" style={{ paddingLeft: `${12 + (depth) * 16}px` }}>
         <div className="flex items-center gap-1.5">
           {task.isMilestone && <div className="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0" />}
           {task.isSummary && !task.isMilestone && <div className="w-2 h-2 rounded-sm bg-primary flex-shrink-0" />}
           <span className="leading-tight">{task.name}</span>
+          {task.isCritical && <Badge className="text-[9px] px-1 py-0 h-3.5 bg-red-500/15 text-red-600 border-red-300 ml-1">Critical</Badge>}
         </div>
       </td>
-      <td className="py-1.5 px-3 text-sm text-muted-foreground whitespace-nowrap">{formatDate(task.start)}</td>
-      <td className="py-1.5 px-3 text-sm text-muted-foreground whitespace-nowrap">{formatDate(task.finish)}</td>
+      <td className="py-1.5 px-3 text-sm text-muted-foreground whitespace-nowrap">{fmtDate(task.start)}</td>
+      <td className="py-1.5 px-3 text-sm text-muted-foreground whitespace-nowrap">{fmtDate(task.finish)}</td>
+      <td className="py-1.5 px-3 text-sm text-muted-foreground">
+        {task.percentComplete != null && task.percentComplete > 0
+          ? <div className="flex items-center gap-1.5"><div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${task.percentComplete}%` }} /></div><span className="text-xs">{task.percentComplete}%</span></div>
+          : null}
+      </td>
       <td className="py-1.5 px-3">
         {task.isMilestone && <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-300">Milestone</Badge>}
         {task.isSummary && !task.isMilestone && <Badge variant="outline" className="text-[10px] h-4">Summary</Badge>}
@@ -55,6 +89,389 @@ function TaskRow({ task, depth }: { task: Task; depth: number }) {
   );
 }
 
+// ── Look-ahead view ──────────────────────────────────────────────────────────
+// Groups tasks by calendar week, shows section label
+function LookaheadView({
+  tasks,
+  fromDate,
+  weeks,
+  section,
+}: {
+  tasks: Task[];
+  fromDate: string;
+  weeks: number;
+  section?: string;
+}) {
+  const from = new Date(fromDate);
+  // Build week buckets
+  const buckets: { label: string; start: Date; tasks: Task[] }[] = [];
+  for (let w = 0; w < weeks; w++) {
+    const wStart = addDays(from, w * 7);
+    const wEnd = addDays(wStart, 6);
+    buckets.push({
+      label: weekLabel(wStart),
+      start: wStart,
+      tasks: tasks.filter(t => {
+        if (!t.start) return false;
+        const s = new Date(t.start);
+        return s >= wStart && s <= wEnd;
+      }),
+    });
+  }
+
+  const totalTaskCount = tasks.length;
+
+  return (
+    <div className="mt-4 space-y-1">
+      {/* Header bar */}
+      <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg">
+        <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+          <Eye className="h-4 w-4 flex-shrink-0" />
+          <span>
+            <strong>{weeks}-Week Look-ahead</strong>
+            {section && <> · Section: <strong>{section}</strong></>}
+            {" "}· From <strong>{fmtDate(fromDate)}</strong>
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-amber-700 dark:text-amber-300">{totalTaskCount} task{totalTaskCount !== 1 ? "s" : ""} in window</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-50"
+            onClick={() => window.print()}
+          >
+            <Printer className="h-3 w-3" /> Print
+          </Button>
+        </div>
+      </div>
+
+      {totalTaskCount === 0 ? (
+        <div className="text-center py-14 text-muted-foreground border-2 border-dashed rounded-lg">
+          <Eye className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm font-medium">No tasks fall in this look-ahead window</p>
+          <p className="text-xs mt-1 opacity-60">Try a broader window or change the From date</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {buckets.map((bucket, bi) => (
+            <div key={bi} className="border rounded-lg overflow-hidden">
+              {/* Week header */}
+              <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 border-b">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-semibold text-foreground">{bucket.label}</span>
+                <Badge variant="outline" className="text-[10px] ml-auto">
+                  {bucket.tasks.length} task{bucket.tasks.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+              {bucket.tasks.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-muted-foreground italic">No tasks starting this week</div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border/30">
+                      <th className="py-1.5 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Activity</th>
+                      <th className="py-1.5 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Start</th>
+                      <th className="py-1.5 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Finish</th>
+                      <th className="py-1.5 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Progress</th>
+                      <th className="py-1.5 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bucket.tasks.map(t => (
+                      <tr key={t.uid} className={cn(
+                        "border-b border-border/30 last:border-0",
+                        t.isSummary && "bg-muted/20 font-medium",
+                        t.isMilestone && "bg-amber-50/60 dark:bg-amber-950/20",
+                      )}>
+                        <td className="py-2 px-3 text-sm" style={{ paddingLeft: `${12 + ((t.outlineLevel ?? 1) - 1) * 14}px` }}>
+                          <div className="flex items-center gap-1.5">
+                            {t.isMilestone && <div className="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0" />}
+                            <span>{t.name}</span>
+                            {t.isCritical && <Badge className="text-[9px] px-1 py-0 h-3.5 bg-red-500/15 text-red-600 border-red-300">Crit</Badge>}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-sm text-muted-foreground whitespace-nowrap">{fmtShort(t.start)}</td>
+                        <td className="py-2 px-3 text-sm text-muted-foreground whitespace-nowrap">{fmtShort(t.finish)}</td>
+                        <td className="py-2 px-3">
+                          {t.percentComplete != null && t.percentComplete > 0 ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-14 h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${t.percentComplete}%` }} />
+                              </div>
+                              <span className="text-xs text-muted-foreground">{t.percentComplete}%</span>
+                            </div>
+                          ) : <span className="text-xs text-muted-foreground">—</span>}
+                        </td>
+                        <td className="py-2 px-3">
+                          {t.isMilestone && <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-300">Milestone</Badge>}
+                          {t.isSummary && !t.isMilestone && <Badge variant="outline" className="text-[10px] h-4">Summary</Badge>}
+                          {!t.isMilestone && !t.isSummary && <Badge variant="outline" className="text-[10px] h-4 text-muted-foreground">Activity</Badge>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Cycle Overlay view ───────────────────────────────────────────────────────
+// Shows contract (baseline) alongside target (cycle-adjusted) — side by side
+function CycleOverlayView({
+  baselineTasks,
+  targetTasks,
+  originalCycleDays,
+  newCycleDays,
+}: {
+  baselineTasks: Task[];
+  targetTasks: Task[];
+  originalCycleDays: number;
+  newCycleDays: number;
+}) {
+  // Build a merged view matching tasks by uid
+  const merged = baselineTasks.map(bt => ({
+    bt,
+    tt: targetTasks.find(t => t.uid === bt.uid),
+  }));
+
+  const isAccelerated = newCycleDays < originalCycleDays;
+  const changedCount = merged.filter(({ bt, tt }) => {
+    if (!tt) return false;
+    return bt.start !== tt.start || bt.finish !== tt.finish;
+  }).length;
+
+  return (
+    <div className="mt-4 space-y-3">
+      {/* Summary banner */}
+      <div className={cn(
+        "flex items-center gap-3 p-3 rounded-lg border text-sm",
+        isAccelerated
+          ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200"
+          : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200"
+      )}>
+        <RefreshCw className="h-4 w-4 flex-shrink-0" />
+        <div>
+          <span className="font-semibold">Cycle Overlay:</span>{" "}
+          Contract programme ({originalCycleDays}-day cycle) vs Target programme ({newCycleDays}-day cycle)
+          {isAccelerated
+            ? <span className="ml-1">— programme <strong>accelerated</strong> by {Math.round((1 - newCycleDays / originalCycleDays) * 100)}%</span>
+            : <span className="ml-1">— programme <strong>extended</strong></span>}
+        </div>
+        <div className="ml-auto flex items-center gap-2 text-xs">
+          {isAccelerated ? <TrendingDown className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
+          <span>{changedCount} tasks shifted</span>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-xs text-muted-foreground px-1">
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-muted/60 border" /> Contract (baseline)</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-primary/20 border border-primary/40" /> Target (adjusted)</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-green-500/20 border border-green-400" /> Earlier finish</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-500/20 border border-red-400" /> Later finish</div>
+      </div>
+
+      {/* Table */}
+      <div className="border rounded-lg overflow-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40 sticky top-0">
+            <tr>
+              <th className="py-2 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide min-w-[200px]">Activity</th>
+              {/* Contract columns */}
+              <th className="py-2 px-3 text-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wide bg-muted/20" colSpan={2}>
+                Contract ({originalCycleDays}-day)
+              </th>
+              {/* Arrow */}
+              <th className="py-1 px-1 w-6" />
+              {/* Target columns */}
+              <th className="py-2 px-3 text-center text-[10px] font-semibold text-primary/80 uppercase tracking-wide bg-primary/5" colSpan={2}>
+                Target ({newCycleDays}-day)
+              </th>
+              <th className="py-2 px-3 text-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Diff</th>
+            </tr>
+            <tr className="border-t border-border/30">
+              <th className="py-1 px-3" />
+              <th className="py-1 px-3 text-left text-[10px] text-muted-foreground font-normal bg-muted/20 whitespace-nowrap">Start</th>
+              <th className="py-1 px-3 text-left text-[10px] text-muted-foreground font-normal bg-muted/20 whitespace-nowrap">Finish</th>
+              <th className="py-1 px-1 bg-muted/10" />
+              <th className="py-1 px-3 text-left text-[10px] text-primary/70 font-normal bg-primary/5 whitespace-nowrap">Start</th>
+              <th className="py-1 px-3 text-left text-[10px] text-primary/70 font-normal bg-primary/5 whitespace-nowrap">Finish</th>
+              <th className="py-1 px-3 text-center text-[10px] text-muted-foreground font-normal whitespace-nowrap">days</th>
+            </tr>
+          </thead>
+          <tbody>
+            {merged.map(({ bt, tt }, i) => {
+              const diff = daysBetween(tt?.finish, bt?.finish); // positive = target is earlier (good)
+              const hasChange = tt && (bt.start !== tt.start || bt.finish !== tt.finish);
+              return (
+                <tr
+                  key={bt.uid}
+                  className={cn(
+                    "border-b border-border/30 last:border-0 hover:bg-muted/10 transition-colors",
+                    bt.isSummary && "font-medium",
+                    bt.isMilestone && "bg-amber-50/40 dark:bg-amber-950/20",
+                  )}
+                >
+                  {/* Activity name */}
+                  <td className="py-1.5 px-3 text-sm" style={{ paddingLeft: `${12 + ((bt.outlineLevel ?? 1) - 1) * 14}px` }}>
+                    <div className="flex items-center gap-1.5">
+                      {bt.isMilestone && <div className="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0" />}
+                      {bt.isSummary && !bt.isMilestone && <div className="w-2 h-2 rounded-sm bg-muted-foreground/50 flex-shrink-0" />}
+                      <span className="leading-tight">{bt.name}</span>
+                    </div>
+                  </td>
+                  {/* Contract */}
+                  <td className="py-1.5 px-3 text-xs text-muted-foreground whitespace-nowrap bg-muted/10">{fmtShort(bt.start)}</td>
+                  <td className="py-1.5 px-3 text-xs text-muted-foreground whitespace-nowrap bg-muted/10">{fmtShort(bt.finish)}</td>
+                  {/* Arrow */}
+                  <td className="py-1 px-0 text-center">
+                    {hasChange && <ArrowRight className="h-3 w-3 text-muted-foreground/40 mx-auto" />}
+                  </td>
+                  {/* Target */}
+                  <td className={cn(
+                    "py-1.5 px-3 text-xs whitespace-nowrap",
+                    hasChange ? "text-primary font-medium bg-primary/5" : "text-muted-foreground bg-primary/3"
+                  )}>{tt ? fmtShort(tt.start) : "—"}</td>
+                  <td className={cn(
+                    "py-1.5 px-3 text-xs whitespace-nowrap",
+                    hasChange ? "text-primary font-medium bg-primary/5" : "text-muted-foreground bg-primary/3"
+                  )}>{tt ? fmtShort(tt.finish) : "—"}</td>
+                  {/* Diff */}
+                  <td className="py-1.5 px-3 text-center">
+                    {diff != null && hasChange ? (
+                      <span className={cn(
+                        "text-xs font-semibold px-1.5 py-0.5 rounded",
+                        diff > 0 ? "text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/40"
+                          : diff < 0 ? "text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/40"
+                            : "text-muted-foreground"
+                      )}>
+                        {diff > 0 ? `-${diff}d` : diff < 0 ? `+${Math.abs(diff)}d` : "±0"}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/40">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-xs text-muted-foreground px-1">
+        Diff column: negative days = target is earlier than contract (accelerated). Positive days = target is later.
+        Green = programme gains, Red = programme slips.
+      </p>
+    </div>
+  );
+}
+
+// ── EOT Result view ──────────────────────────────────────────────────────────
+function EOTResultView({
+  originalTasks,
+  adjustedTasks,
+  delayHours,
+  appliedFrom,
+  description,
+}: {
+  originalTasks: Task[];
+  adjustedTasks: Task[];
+  delayHours: number;
+  appliedFrom: string;
+  description: string;
+}) {
+  const shiftedCount = adjustedTasks.filter((at, i) => {
+    const ot = originalTasks[i];
+    return ot && at.start !== ot.start;
+  }).length;
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+        <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+        <div>
+          <span className="font-semibold">EOT Applied:</span> {description} — {delayHours}h shift from{" "}
+          <strong>{fmtDate(appliedFrom)}</strong>
+        </div>
+        <span className="ml-auto text-xs">{shiftedCount} tasks pushed out</span>
+      </div>
+
+      <div className="flex items-center gap-4 text-xs text-muted-foreground px-1">
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-muted/60 border" /> Original date</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-blue-500/20 border border-blue-400" /> Shifted date</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-muted/20 border border-border/40" /> Unaffected</div>
+      </div>
+
+      <div className="border rounded-lg overflow-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40">
+            <tr>
+              <th className="py-2 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Activity</th>
+              <th className="py-2 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Original Start</th>
+              <th className="py-2 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Shifted Start</th>
+              <th className="py-2 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Original Finish</th>
+              <th className="py-2 px-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Shifted Finish</th>
+              <th className="py-2 px-3 text-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Impact</th>
+            </tr>
+          </thead>
+          <tbody>
+            {adjustedTasks.map((at, i) => {
+              const ot = originalTasks[i];
+              const shifted = ot && at.start !== ot.start;
+              return (
+                <tr
+                  key={at.uid}
+                  className={cn(
+                    "border-b border-border/30 last:border-0",
+                    shifted ? "bg-blue-50/40 dark:bg-blue-950/10" : "",
+                    at.isSummary && "font-medium bg-muted/20",
+                  )}
+                >
+                  <td className="py-1.5 px-3 text-sm" style={{ paddingLeft: `${12 + ((at.outlineLevel ?? 1) - 1) * 14}px` }}>
+                    <div className="flex items-center gap-1.5">
+                      {at.isMilestone && <div className="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0" />}
+                      <span>{at.name}</span>
+                    </div>
+                  </td>
+                  {/* Original dates */}
+                  <td className="py-1.5 px-3 text-xs text-muted-foreground whitespace-nowrap">
+                    {shifted ? <span className="line-through opacity-50">{fmtShort(ot?.start)}</span> : fmtShort(ot?.start)}
+                  </td>
+                  {/* Shifted start */}
+                  <td className={cn("py-1.5 px-3 text-xs whitespace-nowrap", shifted ? "text-blue-700 dark:text-blue-300 font-medium" : "text-muted-foreground")}>
+                    {fmtShort(at.start)}
+                  </td>
+                  {/* Original finish */}
+                  <td className="py-1.5 px-3 text-xs text-muted-foreground whitespace-nowrap">
+                    {shifted ? <span className="line-through opacity-50">{fmtShort(ot?.finish)}</span> : fmtShort(ot?.finish)}
+                  </td>
+                  {/* Shifted finish */}
+                  <td className={cn("py-1.5 px-3 text-xs whitespace-nowrap", shifted ? "text-blue-700 dark:text-blue-300 font-medium" : "text-muted-foreground")}>
+                    {fmtShort(at.finish)}
+                  </td>
+                  {/* Impact badge */}
+                  <td className="py-1.5 px-3 text-center">
+                    {shifted
+                      ? <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300">Shifted</Badge>
+                      : <span className="text-[10px] text-muted-foreground/40">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function ProgrammePage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -72,13 +489,15 @@ export default function ProgrammePage() {
   const [eotForm, setEotForm] = useState({ type: "weather", description: "", delayHours: "8", appliedFrom: "" });
   // Cycle form
   const [cycleForm, setCycleForm] = useState({ newCycleDays: "" });
-  // Lookahead
+  // Lookahead form
   const [lookaheadForm, setLookaheadForm] = useState({ weeks: "2", section: "", from: "" });
-  const [lookaheadTasks, setLookaheadTasks] = useState<Task[] | null>(null);
-  const [cycleResult, setCycleResult] = useState<{ tasks: Task[]; originalCycleDays: number; newCycleDays: number } | null>(null);
-  const [eotTasks, setEotTasks] = useState<Task[] | null>(null);
   const [uploadLabel, setUploadLabel] = useState("");
   const [uploadType, setUploadType] = useState("baseline");
+
+  // Results
+  const [lookaheadResult, setLookaheadResult] = useState<{ tasks: Task[]; from: string; weeks: number; section?: string } | null>(null);
+  const [cycleResult, setCycleResult] = useState<{ baseline: Task[]; target: Task[]; originalCycleDays: number; newCycleDays: number } | null>(null);
+  const [eotResult, setEotResult] = useState<{ original: Task[]; adjusted: Task[]; delayHours: number; appliedFrom: string; description: string } | null>(null);
 
   const { data: project } = useQuery<any>({ queryKey: [`/api/projects/${pid}`] });
   const { data: programmes = [], isLoading: progsLoading } = useQuery<any[]>({ queryKey: [`/api/projects/${pid}/programmes`] });
@@ -92,7 +511,10 @@ export default function ProgrammePage() {
 
   const eotEvents = useQuery<any[]>({ queryKey: [`/api/projects/${pid}/eot`] });
 
-  // Upload — send as multipart FormData to avoid JSON body size limits
+  const tasks = taskData?.tasks ?? [];
+  const cycle = taskData?.cycleDetectedDays;
+
+  // ── Upload ───────────────────────────────────────────────────────────────
   const uploadMut = useMutation({
     mutationFn: (formData: FormData) =>
       apiRequest("POST", `/api/projects/${pid}/programmes/upload`, formData),
@@ -116,15 +538,21 @@ export default function ProgrammePage() {
     e.target.value = "";
   }
 
-  // EOT
+  // ── EOT ──────────────────────────────────────────────────────────────────
   const eotMut = useMutation({
     mutationFn: (data: any) => apiRequest("POST", `/api/projects/${pid}/eot`, data),
-    onSuccess: (d) => {
+    onSuccess: (d: any) => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/eot`] });
-      setEotTasks(d.tasks);
+      setEotResult({
+        original: tasks,
+        adjusted: d.tasks,
+        delayHours: parseFloat(eotForm.delayHours),
+        appliedFrom: eotForm.appliedFrom,
+        description: eotForm.description || eotForm.type,
+      });
       setShowEOT(false);
       setTab("eot-result");
-      toast({ title: "EOT applied", description: `Programme shifted by ${eotForm.delayHours} hours` });
+      toast({ title: "EOT applied", description: `Programme shifted by ${eotForm.delayHours}h` });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -134,14 +562,19 @@ export default function ProgrammePage() {
     eotMut.mutate({ ...eotForm, programmeId: activeProg, delayHours: parseFloat(eotForm.delayHours) });
   }
 
-  // Cycle
+  // ── Cycle ─────────────────────────────────────────────────────────────────
   const cycleMut = useMutation({
     mutationFn: (data: any) => apiRequest("POST", `/api/projects/${pid}/programmes/${activeProg}/cycle`, data),
-    onSuccess: (d) => {
-      setCycleResult({ tasks: d.tasks, originalCycleDays: d.originalCycleDays, newCycleDays: parseFloat(cycleForm.newCycleDays) });
+    onSuccess: (d: any) => {
+      setCycleResult({
+        baseline: tasks,
+        target: d.tasks,
+        originalCycleDays: d.originalCycleDays,
+        newCycleDays: parseFloat(cycleForm.newCycleDays),
+      });
       setShowCycle(false);
-      setTab("cycle-result");
-      toast({ title: "Cycle recalculated", description: `Programme regenerated on ${cycleForm.newCycleDays}-day cycle` });
+      setTab("cycle-overlay");
+      toast({ title: "Cycle overlay generated", description: `${d.originalCycleDays}-day vs ${cycleForm.newCycleDays}-day comparison ready` });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -151,7 +584,7 @@ export default function ProgrammePage() {
     cycleMut.mutate({ newCycleDays: parseFloat(cycleForm.newCycleDays) });
   }
 
-  // Lookahead
+  // ── Lookahead ─────────────────────────────────────────────────────────────
   async function handleLookahead(e: React.FormEvent) {
     e.preventDefault();
     try {
@@ -161,26 +594,33 @@ export default function ProgrammePage() {
         ...(lookaheadForm.section && { section: lookaheadForm.section }),
       });
       const data = await apiRequest("GET", `/api/projects/${pid}/programmes/${activeProg}/lookahead?${params}`);
-      setLookaheadTasks(data.tasks);
+      setLookaheadResult({
+        tasks: data.tasks,
+        from: data.from,
+        weeks: parseInt(lookaheadForm.weeks),
+        section: lookaheadForm.section || undefined,
+      });
       setShowLookahead(false);
       setTab("lookahead");
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
   }
-
-  const tasks = taskData?.tasks ?? [];
-  const cycle = taskData?.cycleDetectedDays;
 
   return (
     <Layout projectId={pid} projectName={project?.name} breadcrumb="Programme">
       <div className="px-6 py-6">
+        {/* Page header */}
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-xl font-bold">Programme</h1>
-            {cycle && <p className="text-xs text-muted-foreground mt-0.5">Structural cycle detected: <span className="font-semibold text-foreground">{cycle} days</span></p>}
+            {cycle && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Structural cycle detected: <span className="font-semibold text-foreground">{cycle} days</span>
+              </p>
+            )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {activeProg && (
               <>
                 <Button size="sm" variant="outline" onClick={() => setShowLookahead(true)}>
@@ -191,7 +631,7 @@ export default function ProgrammePage() {
                 </Button>
                 {cycle && (
                   <Button size="sm" variant="outline" onClick={() => setShowCycle(true)}>
-                    <RefreshCw className="h-4 w-4 mr-1" /> Adjust Cycle
+                    <RefreshCw className="h-4 w-4 mr-1" /> Cycle Overlay
                   </Button>
                 )}
               </>
@@ -204,9 +644,9 @@ export default function ProgrammePage() {
           </div>
         </div>
 
-        {/* Programme selector */}
+        {/* Programme version selector */}
         {programmes.length > 1 && (
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
             <span className="text-xs text-muted-foreground">Viewing:</span>
             {programmes.map((p: any) => (
               <Button
@@ -223,13 +663,14 @@ export default function ProgrammePage() {
           </div>
         )}
 
+        {/* Main content */}
         {progsLoading ? (
           <div className="h-40 bg-muted rounded-lg animate-pulse" />
         ) : programmes.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl text-center">
             <Upload className="h-10 w-10 text-muted-foreground/40 mb-3" />
             <p className="font-medium">No programme uploaded yet</p>
-            <p className="text-sm text-muted-foreground mt-1">Upload an MS Project XML file to get started</p>
+            <p className="text-sm text-muted-foreground mt-1">Upload an MS Project XML or Asta XML file to get started</p>
             <div className="mt-4 flex gap-2">
               <Input placeholder="Label (e.g. Baseline)" className="w-48 h-8 text-xs" value={uploadLabel} onChange={e => setUploadLabel(e.target.value)} />
               <Button size="sm" onClick={() => fileRef.current?.click()}>
@@ -239,161 +680,120 @@ export default function ProgrammePage() {
           </div>
         ) : (
           <Tabs value={tab} onValueChange={setTab}>
-            <TabsList>
+            <TabsList className="flex-wrap">
               <TabsTrigger value="tasks">Tasks</TabsTrigger>
               <TabsTrigger value="eot-log">EOT Log</TabsTrigger>
-              {eotTasks && <TabsTrigger value="eot-result">EOT Result</TabsTrigger>}
-              {cycleResult && <TabsTrigger value="cycle-result">Cycle View</TabsTrigger>}
-              {lookaheadTasks && <TabsTrigger value="lookahead">Look-ahead</TabsTrigger>}
+              {eotResult && <TabsTrigger value="eot-result">EOT Result</TabsTrigger>}
+              {cycleResult && <TabsTrigger value="cycle-overlay">Cycle Overlay</TabsTrigger>}
+              {lookaheadResult && <TabsTrigger value="lookahead">Look-ahead</TabsTrigger>}
             </TabsList>
 
-            {/* Task list */}
+            {/* ── Tasks tab ── */}
             <TabsContent value="tasks">
-              {tasksLoading ? <div className="h-40 bg-muted rounded-lg animate-pulse mt-4" /> : (
+              {tasksLoading ? (
+                <div className="h-40 bg-muted rounded-lg animate-pulse mt-4" />
+              ) : (
                 <div className="mt-4 border rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Task</th>
-                        <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs whitespace-nowrap">Start</th>
-                        <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs whitespace-nowrap">Finish</th>
-                        <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Type</th>
+                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Activity</th>
+                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs whitespace-nowrap">Start</th>
+                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs whitespace-nowrap">Finish</th>
+                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Progress</th>
+                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Type</th>
                       </tr>
                     </thead>
                     <tbody>
                       {tasks.length === 0 ? (
-                        <tr><td colSpan={4} className="py-8 text-center text-muted-foreground">No tasks found in programme</td></tr>
+                        <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No tasks found in programme</td></tr>
                       ) : tasks.map(t => (
                         <TaskRow key={t.uid} task={t} depth={(t.outlineLevel ?? 1) - 1} />
                       ))}
                     </tbody>
                   </table>
-                  <div className="p-3 text-xs text-muted-foreground border-t">
-                    {tasks.length} tasks · {tasks.filter(t => t.isMilestone).length} milestones
+                  <div className="p-3 text-xs text-muted-foreground border-t bg-muted/20">
+                    {tasks.length} tasks · {tasks.filter(t => t.isMilestone).length} milestones · {tasks.filter(t => t.isCritical).length} critical path
                   </div>
                 </div>
               )}
             </TabsContent>
 
-            {/* EOT Log */}
+            {/* ── EOT Log tab ── */}
             <TabsContent value="eot-log">
               <div className="mt-4 space-y-3">
-                {eotEvents.isLoading ? <div className="h-20 bg-muted rounded-lg animate-pulse" /> :
-                  (eotEvents.data ?? []).length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">No EOT events recorded</div>
-                  ) : (eotEvents.data ?? []).map((e: any) => (
-                    <Card key={e.id}>
-                      <CardContent className="py-3 px-4 flex items-center gap-4">
-                        <div className={cn("p-2 rounded-lg", e.type === "weather" ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600")}>
-                          <CloudRain className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{e.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {e.delayHours}h delay from {formatDate(e.applied_from)} · {e.type === "weather" ? "Weather Event" : "IR Event"}
-                          </p>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{formatDate(e.created_at)}</span>
-                      </CardContent>
-                    </Card>
-                  ))
-                }
+                {eotEvents.isLoading ? (
+                  <div className="h-20 bg-muted rounded-lg animate-pulse" />
+                ) : (eotEvents.data ?? []).length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
+                    <CloudRain className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">No EOT events recorded yet</p>
+                  </div>
+                ) : (eotEvents.data ?? []).map((e: any) => (
+                  <Card key={e.id}>
+                    <CardContent className="py-3 px-4 flex items-center gap-4">
+                      <div className={cn("p-2 rounded-lg", e.type === "weather" ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600")}>
+                        <CloudRain className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{e.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {e.delayHours}h delay from {fmtDate(e.applied_from)} · {e.type === "weather" ? "Weather Event" : "IR Event"}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-xs">{e.type === "weather" ? "Weather" : "IR"}</Badge>
+                      <span className="text-xs text-muted-foreground">{fmtDate(e.created_at)}</span>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </TabsContent>
 
-            {/* EOT Result */}
-            {eotTasks && (
+            {/* ── EOT Result tab ── */}
+            {eotResult && (
               <TabsContent value="eot-result">
-                <div className="mt-4">
-                  <div className="flex items-center gap-2 mb-3 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg text-sm text-blue-700 dark:text-blue-300">
-                    <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                    Programme shifted. Tasks from delay point onwards have been pushed out.
-                  </div>
-                  <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Task</th>
-                          <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Start</th>
-                          <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Finish</th>
-                          <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Type</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {eotTasks.map(t => <TaskRow key={t.uid} task={t} depth={(t.outlineLevel ?? 1) - 1} />)}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <EOTResultView
+                  originalTasks={eotResult.original}
+                  adjustedTasks={eotResult.adjusted}
+                  delayHours={eotResult.delayHours}
+                  appliedFrom={eotResult.appliedFrom}
+                  description={eotResult.description}
+                />
               </TabsContent>
             )}
 
-            {/* Cycle Result */}
+            {/* ── Cycle Overlay tab ── */}
             {cycleResult && (
-              <TabsContent value="cycle-result">
-                <div className="mt-4">
-                  <div className="flex items-center gap-2 mb-3 p-3 bg-green-50 dark:bg-green-950 rounded-lg text-sm text-green-700 dark:text-green-300">
-                    <RefreshCw className="h-4 w-4 flex-shrink-0" />
-                    Programme recalculated from {cycleResult.originalCycleDays}-day to {cycleResult.newCycleDays}-day cycle. All trades accelerated accordingly.
-                  </div>
-                  <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Task</th>
-                          <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Start (New)</th>
-                          <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Finish (New)</th>
-                          <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Type</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cycleResult.tasks.map(t => <TaskRow key={t.uid} task={t} depth={(t.outlineLevel ?? 1) - 1} />)}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+              <TabsContent value="cycle-overlay">
+                <CycleOverlayView
+                  baselineTasks={cycleResult.baseline}
+                  targetTasks={cycleResult.target}
+                  originalCycleDays={cycleResult.originalCycleDays}
+                  newCycleDays={cycleResult.newCycleDays}
+                />
               </TabsContent>
             )}
 
-            {/* Look-ahead */}
-            {lookaheadTasks && (
+            {/* ── Look-ahead tab ── */}
+            {lookaheadResult && (
               <TabsContent value="lookahead">
-                <div className="mt-4">
-                  <div className="flex items-center gap-2 mb-3 p-3 bg-amber-50 dark:bg-amber-950 rounded-lg text-sm text-amber-700 dark:text-amber-300">
-                    <Eye className="h-4 w-4 flex-shrink-0" />
-                    {lookaheadTasks.length} tasks in look-ahead window. Review and confirm with your team.
-                  </div>
-                  {lookaheadTasks.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">No tasks in this look-ahead period</div>
-                  ) : (
-                    <div className="border rounded-lg overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50">
-                          <tr>
-                            <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Task</th>
-                            <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Start</th>
-                            <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Finish</th>
-                            <th className="py-2 px-3 text-left font-medium text-muted-foreground text-xs">Type</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {lookaheadTasks.map(t => <TaskRow key={t.uid} task={t} depth={(t.outlineLevel ?? 1) - 1} />)}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
+                <LookaheadView
+                  tasks={lookaheadResult.tasks}
+                  fromDate={lookaheadResult.from}
+                  weeks={lookaheadResult.weeks}
+                  section={lookaheadResult.section}
+                />
               </TabsContent>
             )}
           </Tabs>
         )}
       </div>
 
-      {/* Upload settings (visible when programme exists) */}
+      {/* Upload revision strip */}
       {programmes.length > 0 && (
         <div className="px-6 pb-4">
           <Separator className="mb-4" />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs text-muted-foreground">Upload new revision:</span>
             <Input placeholder="Label" className="w-40 h-7 text-xs" value={uploadLabel} onChange={e => setUploadLabel(e.target.value)} />
             <Select value={uploadType} onValueChange={setUploadType}>
@@ -403,14 +803,14 @@ export default function ProgrammePage() {
                 <SelectItem value="revision">Revision</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="sm" className="h-7 text-xs" onClick={() => fileRef.current?.click()}>
+            <Button size="sm" className="h-7 text-xs" onClick={() => fileRef.current?.click()} disabled={uploadMut.isPending}>
               <Upload className="h-3 w-3 mr-1" /> Upload
             </Button>
           </div>
         </div>
       )}
 
-      {/* EOT Dialog */}
+      {/* ── EOT Dialog ── */}
       <Dialog open={showEOT} onOpenChange={setShowEOT}>
         <DialogContent>
           <DialogHeader><DialogTitle>Apply EOT Delay</DialogTitle></DialogHeader>
@@ -447,7 +847,7 @@ export default function ProgrammePage() {
             </div>
             <div className="p-3 bg-amber-50 dark:bg-amber-950 rounded-lg text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
               <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-              All tasks from the delay date onwards will shift by the selected duration. The updated programme can be reviewed before saving.
+              All tasks from the delay date onwards will shift by the selected duration. A before/after comparison will be shown.
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowEOT(false)}>Cancel</Button>
@@ -460,17 +860,20 @@ export default function ProgrammePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Cycle Dialog */}
+      {/* ── Cycle Overlay Dialog ── */}
       <Dialog open={showCycle} onOpenChange={setShowCycle}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Adjust Structural Cycle</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Cycle Overlay</DialogTitle></DialogHeader>
           <form onSubmit={handleCycle} className="space-y-4 mt-2">
-            <div className="p-3 bg-muted rounded-lg text-sm">
-              <p>Current detected cycle: <strong>{cycle} days</strong></p>
-              <p className="text-xs text-muted-foreground mt-1">Changing the cycle will proportionally reschedule all tasks — structure leads, all trades follow automatically.</p>
+            <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+              <p>Contract cycle: <strong>{cycle} days</strong></p>
+              <p className="text-xs text-muted-foreground">
+                Set a target cycle length to see the full programme overlaid side-by-side —
+                contract dates vs accelerated target dates. Structure leads, all trades follow proportionally.
+              </p>
             </div>
             <div className="space-y-1.5">
-              <Label>New Cycle Length (days)</Label>
+              <Label>Target Cycle Length (days)</Label>
               <Input
                 type="number"
                 min="1"
@@ -478,23 +881,25 @@ export default function ProgrammePage() {
                 step="0.5"
                 value={cycleForm.newCycleDays}
                 onChange={e => setCycleForm({ newCycleDays: e.target.value })}
-                placeholder={`e.g. 7 (current: ${cycle})`}
+                placeholder={`e.g. 7 (current contract: ${cycle} days)`}
                 required
               />
-              <p className="text-xs text-muted-foreground">e.g. change from 8-day to 7-day cycle to see the accelerated programme</p>
+              <p className="text-xs text-muted-foreground">
+                e.g. change from {cycle}-day to 7-day cycle to see the accelerated programme overlaid against contract
+              </p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowCycle(false)}>Cancel</Button>
               <Button type="submit" disabled={cycleMut.isPending}>
                 {cycleMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                Recalculate Programme
+                Generate Overlay
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Look-ahead Dialog */}
+      {/* ── Look-ahead Dialog ── */}
       <Dialog open={showLookahead} onOpenChange={setShowLookahead}>
         <DialogContent>
           <DialogHeader><DialogTitle>Generate Look-ahead</DialogTitle></DialogHeader>
@@ -512,18 +917,20 @@ export default function ProgrammePage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>From Date</Label>
-              <Input type="date" value={lookaheadForm.from} onChange={e => setLookaheadForm(f => ({ ...f, from: e.target.value }))} />
-              <p className="text-xs text-muted-foreground">Leave blank to use today</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Filter by Section / Trade (optional)</Label>
+              <Label>Section / Trade (optional)</Label>
               <Input
                 value={lookaheadForm.section}
                 onChange={e => setLookaheadForm(f => ({ ...f, section: e.target.value }))}
-                placeholder="e.g. Structure, Facade, Services"
+                placeholder="e.g. Structure, Facade, Services, Concrete"
               />
-              <p className="text-xs text-muted-foreground">Filters tasks by name — review and confirm the result with your team</p>
+              <p className="text-xs text-muted-foreground">
+                Filters by section name — e.g. "Structure" for structure look-ahead, "Facade" for facade programme
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>From Date</Label>
+              <Input type="date" value={lookaheadForm.from} onChange={e => setLookaheadForm(f => ({ ...f, from: e.target.value }))} />
+              <p className="text-xs text-muted-foreground">Leave blank to use today</p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowLookahead(false)}>Cancel</Button>
