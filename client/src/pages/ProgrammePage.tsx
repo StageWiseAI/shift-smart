@@ -531,11 +531,13 @@ export default function ProgrammePage() {
   const [eotResult, setEotResult] = useState<{ original: Task[]; adjusted: Task[]; delayHours: number; appliedFrom: string; description: string } | null>(null);
 
   const { data: project } = useQuery<any>({ queryKey: [`/api/projects/${pid}`] });
-  const { data: programmes = [], isLoading: progsLoading } = useQuery<any[]>({ queryKey: [`/api/projects/${pid}/programmes`] });
+  const STALE = 5 * 60 * 1000;
+  const { data: programmes = [], isLoading: progsLoading } = useQuery<any[]>({
+    queryKey: [`/api/projects/${pid}/programmes`],
+    staleTime: STALE,
+  });
 
   const activeProg = selectedProgId ?? (programmes[0]?.id ?? null);
-
-  const STALE = 5 * 60 * 1000;
   const { data: taskData, isLoading: tasksLoading } = useQuery<{ tasks: Task[]; cycleDetectedDays: number | null }>({
     queryKey: [`/api/projects/${pid}/programmes/${activeProg}/tasks`],
     enabled: !!activeProg,
@@ -762,7 +764,13 @@ export default function ProgrammePage() {
 
         {/* Main content */}
         {progsLoading ? (
-          <div className="h-40 bg-muted rounded-lg animate-pulse" />
+          // Skeleton that looks like a programme table — reassures user data is loading
+          <div className="space-y-2 mt-2">
+            <div className="h-8 bg-muted rounded animate-pulse w-64" />
+            {[1,2,3,4,5,6,7,8].map(i => (
+              <div key={i} className="h-9 bg-muted/60 rounded animate-pulse" style={{ opacity: 1 - i * 0.08 }} />
+            ))}
+          </div>
         ) : programmes.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl text-center">
             <Upload className="h-10 w-10 text-muted-foreground/40 mb-3" />
@@ -788,7 +796,19 @@ export default function ProgrammePage() {
             {/* ── Tasks tab ── */}
             <TabsContent value="tasks">
               {tasksLoading ? (
-                <div className="h-40 bg-muted rounded-lg animate-pulse mt-4" />
+                <div className="mt-4 space-y-1">
+                  <p className="text-xs text-muted-foreground mb-3 flex items-center gap-2">
+                    <span className="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    Loading programme tasks…
+                  </p>
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(i => (
+                    <div key={i} className="h-8 bg-muted/50 rounded animate-pulse flex items-center px-3 gap-4" style={{ opacity: 1 - i * 0.06 }}>
+                      <div className="h-3 bg-muted rounded w-1/2" />
+                      <div className="h-3 bg-muted rounded w-20 ml-auto" />
+                      <div className="h-3 bg-muted rounded w-20" />
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="mt-4 space-y-3">
                   {/* Search bar */}
