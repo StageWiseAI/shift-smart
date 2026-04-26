@@ -269,7 +269,7 @@ function CycleOverlayView({
       )}>
         <RefreshCw className="h-4 w-4 flex-shrink-0" />
         <div>
-          <span className="font-semibold">Cycle Overlay:</span>{" "}
+          <span className="font-semibold">Acceleration Overlay:</span>{" "}
           Contract programme ({originalCycleDays}-day cycle) vs Target programme ({newCycleDays}-day cycle)
           {isAccelerated
             ? <span className="ml-1">— programme <strong>accelerated</strong> by {Math.round((1 - newCycleDays / originalCycleDays) * 100)}%</span>
@@ -408,7 +408,7 @@ function EOTResultView({
       <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-200">
         <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
         <div>
-          <span className="font-semibold">EOT Applied:</span> {description} — {delayHours}h shift from{" "}
+          <span className="font-semibold">Delay logged:</span> {description} — {delayHours}h shift from{" "}
           <strong>{fmtDate(appliedFrom)}</strong>
         </div>
         <span className="ml-auto text-xs">{shiftedCount} tasks pushed out</span>
@@ -571,7 +571,7 @@ export default function ProgrammePage() {
       });
       setShowEOT(false);
       setTab("eot-result");
-      toast({ title: "EOT applied", description: `Programme shifted by ${eotForm.delayHours}h` });
+      toast({ title: "Delay saved", description: `Programme shifted by ${eotForm.delayHours}h` });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -679,12 +679,12 @@ export default function ProgrammePage() {
                 <Button size="sm" variant="outline" onClick={() => setShowLookahead(true)}>
                   <Eye className="h-4 w-4 mr-1" /> Look-ahead
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setShowEOT(true)}>
-                  <CloudRain className="h-4 w-4 mr-1" /> EOT Delay
+                <Button size="sm" variant="outline" onClick={() => setShowEOT(true)} title="Record a weather, IR or other delay that pushes the programme out">
+                  <CloudRain className="h-4 w-4 mr-1" /> Log a Delay
                 </Button>
                 {cycle && (
-                  <Button size="sm" variant="outline" onClick={() => setShowCycle(true)}>
-                    <RefreshCw className="h-4 w-4 mr-1" /> Cycle Overlay
+                  <Button size="sm" variant="outline" onClick={() => setShowCycle(true)} title="See the programme side-by-side at a shorter cycle time">
+                    <RefreshCw className="h-4 w-4 mr-1" /> Acceleration Overlay
                   </Button>
                 )}
               </>
@@ -735,9 +735,9 @@ export default function ProgrammePage() {
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="flex-wrap">
               <TabsTrigger value="tasks">Tasks</TabsTrigger>
-              <TabsTrigger value="eot-log">EOT Log</TabsTrigger>
-              {eotResult && <TabsTrigger value="eot-result">EOT Result</TabsTrigger>}
-              {cycleResult && <TabsTrigger value="cycle-overlay">Cycle Overlay</TabsTrigger>}
+              <TabsTrigger value="eot-log">Delay Log</TabsTrigger>
+              {eotResult && <TabsTrigger value="eot-result">Delay Result</TabsTrigger>}
+              {cycleResult && <TabsTrigger value="cycle-overlay">Acceleration Overlay</TabsTrigger>}
               {lookaheadResult && <TabsTrigger value="lookahead">Look-ahead</TabsTrigger>}
             </TabsList>
 
@@ -808,7 +808,7 @@ export default function ProgrammePage() {
               )}
             </TabsContent>
 
-            {/* ── EOT Log tab ── */}
+            {/* ── Delay Log tab ── */}
             <TabsContent value="eot-log">
               <div className="mt-4 space-y-3">
                 {eotEvents.isLoading ? (
@@ -816,7 +816,7 @@ export default function ProgrammePage() {
                 ) : (eotEvents.data ?? []).length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
                     <CloudRain className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">No EOT events recorded yet</p>
+                    <p className="text-sm">No delays recorded yet</p>
                   </div>
                 ) : (eotEvents.data ?? []).map((e: any) => (
                   <Card key={e.id}>
@@ -838,7 +838,7 @@ export default function ProgrammePage() {
               </div>
             </TabsContent>
 
-            {/* ── EOT Result tab ── */}
+            {/* ── Delay Result tab ── */}
             {eotResult && (
               <TabsContent value="eot-result">
                 <EOTResultView
@@ -851,7 +851,7 @@ export default function ProgrammePage() {
               </TabsContent>
             )}
 
-            {/* ── Cycle Overlay tab ── */}
+            {/* ── Acceleration Overlay tab ── */}
             {cycleResult && (
               <TabsContent value="cycle-overlay">
                 <CycleOverlayView
@@ -952,47 +952,47 @@ export default function ProgrammePage() {
       {/* ── EOT Dialog ── */}
       <Dialog open={showEOT} onOpenChange={setShowEOT}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Apply EOT Delay</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Log a Site Delay</DialogTitle></DialogHeader>
           <form onSubmit={handleEOT} className="space-y-4 mt-2">
             <div className="space-y-1.5">
-              <Label>Delay Type</Label>
+              <Label>What caused the delay?</Label>
               <Select value={eotForm.type} onValueChange={v => setEotForm(f => ({ ...f, type: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="weather">Weather Event (inclement weather)</SelectItem>
-                  <SelectItem value="ir">IR Event (industrial relations)</SelectItem>
+                  <SelectItem value="weather">Bad Weather</SelectItem>
+                  <SelectItem value="ir">Industrial Relations (IR)</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Description</Label>
+              <Label>Brief description</Label>
               <Input value={eotForm.description} onChange={e => setEotForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Rain event — site shutdown 14:00" />
             </div>
             <div className="space-y-1.5">
-              <Label>Delay Duration</Label>
+              <Label>How long was lost?</Label>
               <Select value={eotForm.delayHours} onValueChange={v => setEotForm(f => ({ ...f, delayHours: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="4">4 hours (half day)</SelectItem>
-                  <SelectItem value="8">8 hours (full day)</SelectItem>
+                  <SelectItem value="4">Half day (4 hours)</SelectItem>
+                  <SelectItem value="8">Full day (8 hours)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">Based on an 8-hour working day</p>
             </div>
             <div className="space-y-1.5">
-              <Label>Apply From (date delay starts affecting work)</Label>
+              <Label>From which date did this delay start?</Label>
               <Input type="date" value={eotForm.appliedFrom} onChange={e => setEotForm(f => ({ ...f, appliedFrom: e.target.value }))} required />
             </div>
             <div className="p-3 bg-amber-50 dark:bg-amber-950 rounded-lg text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
               <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-              All tasks from the delay date onwards will shift by the selected duration. A before/after comparison will be shown.
+              All tasks from this date onwards will shift by the time lost. You'll see a before/after comparison.
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowEOT(false)}>Cancel</Button>
               <Button type="submit" disabled={eotMut.isPending}>
                 {eotMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                Apply EOT
+                Save Delay
               </Button>
             </DialogFooter>
           </form>
@@ -1002,17 +1002,17 @@ export default function ProgrammePage() {
       {/* ── Cycle Overlay Dialog ── */}
       <Dialog open={showCycle} onOpenChange={setShowCycle}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Cycle Overlay</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Acceleration Overlay</DialogTitle></DialogHeader>
           <form onSubmit={handleCycle} className="space-y-4 mt-2">
             <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
-              <p>Contract cycle: <strong>{cycle} days</strong></p>
+              <p>Your contract cycle is <strong>{cycle} days</strong> per floor.</p>
               <p className="text-xs text-muted-foreground">
-                Set a target cycle length to see the full programme overlaid side-by-side —
-                contract dates vs accelerated target dates. Structure leads, all trades follow proportionally.
+                Enter a faster target cycle to see the whole programme side-by-side — contract dates on the left,
+                accelerated target dates on the right. All tasks scale proportionally.
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label>Target Cycle Length (days)</Label>
+              <Label>Target cycle (days per floor)</Label>
               <Input
                 type="number"
                 min="1"
@@ -1020,11 +1020,11 @@ export default function ProgrammePage() {
                 step="0.5"
                 value={cycleForm.newCycleDays}
                 onChange={e => setCycleForm({ newCycleDays: e.target.value })}
-                placeholder={`e.g. 7 (current contract: ${cycle} days)`}
+                placeholder={`e.g. 7 (contract is ${cycle} days)`}
                 required
               />
               <p className="text-xs text-muted-foreground">
-                e.g. change from {cycle}-day to 7-day cycle to see the accelerated programme overlaid against contract
+                e.g. enter 7 to see what the programme looks like at a 7-day cycle instead of {cycle} days
               </p>
             </div>
             <DialogFooter>
@@ -1044,7 +1044,7 @@ export default function ProgrammePage() {
           <DialogHeader><DialogTitle>Generate Look-ahead</DialogTitle></DialogHeader>
           <form onSubmit={handleLookahead} className="space-y-4 mt-2">
             <div className="space-y-1.5">
-              <Label>Look-ahead Window</Label>
+              <Label>How many weeks ahead?</Label>
               <Select value={lookaheadForm.weeks} onValueChange={v => setLookaheadForm(f => ({ ...f, weeks: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -1056,20 +1056,19 @@ export default function ProgrammePage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Section / Trade (optional)</Label>
+              <Label>Filter by trade or section (optional)</Label>
               <Input
                 value={lookaheadForm.section}
                 onChange={e => setLookaheadForm(f => ({ ...f, section: e.target.value }))}
                 placeholder="e.g. Structure, Facade, Services, Concrete"
               />
               <p className="text-xs text-muted-foreground">
-                Filters by section name — e.g. "Structure" for structure look-ahead, "Facade" for facade programme
+                Leave blank to show all trades, or type a trade name to filter — e.g. "Facade"
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label>From Date</Label>
+              <Label>Starting from (leave blank for today)</Label>
               <Input type="date" value={lookaheadForm.from} onChange={e => setLookaheadForm(f => ({ ...f, from: e.target.value }))} />
-              <p className="text-xs text-muted-foreground">Leave blank to use today</p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowLookahead(false)}>Cancel</Button>
