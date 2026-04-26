@@ -32,10 +32,45 @@ interface LayoutProps {
 
 function SiteLogo() {
   return (
-    <svg width="28" height="28" viewBox="0 0 36 36" fill="none" aria-label="Site Smart">
-      <rect x="4" y="14" width="28" height="18" rx="2" fill="hsl(38,95%,52%)" />
-      <polygon points="18,2 32,14 4,14" fill="white" opacity="0.9" />
-      <rect x="13" y="20" width="10" height="12" rx="1" fill="hsl(215,60%,18%)" />
+    <svg width="28" height="28" viewBox="0 0 48 48" fill="none" aria-label="Site Smart">
+      <!-- Ground -->
+      <rect x="4" y="43" width="40" height="2" rx="1" fill="hsl(38,95%,52%)" opacity="0.4"/>
+      <!-- Main highrise building -->
+      <rect x="8" y="14" width="22" height="29" rx="1" fill="hsl(38,95%,52%)"/>
+      <!-- Building facade overlay (darker) -->
+      <rect x="9" y="15" width="20" height="27" rx="1" fill="hsl(215,60%,22%)"/>
+      <!-- Windows row 1 -->
+      <rect x="11" y="17" width="4" height="3" rx="0.5" fill="hsl(38,95%,62%)" opacity="0.9"/>
+      <rect x="17" y="17" width="4" height="3" rx="0.5" fill="hsl(38,95%,62%)" opacity="0.9"/>
+      <rect x="23" y="17" width="4" height="3" rx="0.5" fill="white" opacity="0.5"/>
+      <!-- Windows row 2 -->
+      <rect x="11" y="22" width="4" height="3" rx="0.5" fill="hsl(38,95%,62%)" opacity="0.9"/>
+      <rect x="17" y="22" width="4" height="3" rx="0.5" fill="white" opacity="0.5"/>
+      <rect x="23" y="22" width="4" height="3" rx="0.5" fill="hsl(38,95%,62%)" opacity="0.9"/>
+      <!-- Windows row 3 -->
+      <rect x="11" y="27" width="4" height="3" rx="0.5" fill="white" opacity="0.5"/>
+      <rect x="17" y="27" width="4" height="3" rx="0.5" fill="hsl(38,95%,62%)" opacity="0.9"/>
+      <rect x="23" y="27" width="4" height="3" rx="0.5" fill="hsl(38,95%,62%)" opacity="0.9"/>
+      <!-- Windows row 4 -->
+      <rect x="11" y="32" width="4" height="3" rx="0.5" fill="hsl(38,95%,62%)" opacity="0.7"/>
+      <rect x="17" y="32" width="4" height="3" rx="0.5" fill="white" opacity="0.5"/>
+      <rect x="23" y="32" width="4" height="3" rx="0.5" fill="hsl(38,95%,62%)" opacity="0.7"/>
+      <!-- Door -->
+      <rect x="16" y="37" width="6" height="6" rx="0.5" fill="hsl(215,60%,18%)"/>
+      <!-- Crane mast (vertical) -->
+      <rect x="35" y="8" width="3" height="35" rx="0.5" fill="hsl(38,95%,52%)"/>
+      <!-- Crane jib (horizontal, extending left over building) -->
+      <rect x="10" y="8" width="28" height="2.5" rx="0.5" fill="hsl(38,95%,52%)"/>
+      <!-- Counter-jib (short right extension) -->
+      <rect x="38" y="8" width="6" height="2.5" rx="0.5" fill="hsl(38,95%,52%)"/>
+      <!-- Crane cab box -->
+      <rect x="33" y="6" width="7" height="5" rx="0.5" fill="hsl(38,80%,40%)"/>
+      <!-- Hook cable -->
+      <line x1="20" y1="10.5" x2="20" y2="20" stroke="white" stroke-width="0.8" opacity="0.7"/>
+      <!-- Hook -->
+      <path d="M18.5 20 Q18.5 22.5 20 22.5 Q21.5 22.5 21.5 20" stroke="white" stroke-width="0.8" fill="none" opacity="0.7"/>
+      <!-- Counter-weight -->
+      <rect x="40" y="10" width="3" height="4" rx="0.5" fill="hsl(215,60%,35%)"/>
     </svg>
   );
 }
