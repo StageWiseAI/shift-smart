@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard, HardHat, Truck, ClipboardList, Users, LogOut, ChevronRight,
-  Settings, CalendarDays
+  Settings, CalendarDays, Mail, FileQuestion
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +85,8 @@ export default function Layout({ children, projectId, projectName, breadcrumb }:
     { href: `/projects/${projectId}/materials`, label: "Materials", icon: <Truck className="h-4 w-4" /> },
     { href: `/projects/${projectId}/prestart`, label: "Pre-Start", icon: <HardHat className="h-4 w-4" /> },
     { href: `/projects/${projectId}/meetings`, label: "Meetings", icon: <ClipboardList className="h-4 w-4" /> },
+    { href: `/projects/${projectId}/emails`, label: "Emails", icon: <Mail className="h-4 w-4" /> },
+    { href: `/projects/${projectId}/rfis`, label: "RFIs", icon: <FileQuestion className="h-4 w-4" /> },
   ] : [];
 
   function isActive(href: string, exact?: boolean) {

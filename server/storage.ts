@@ -218,6 +218,7 @@ export interface IStorage {
   updatePrestartMeeting(id: number, data: any): any;
   getPrestartPhotos(meetingId: number): any[];
   addPrestartPhoto(data: any): any;
+  getPrestartPhotoData(id: number): any;
   deletePrestartPhoto(id: number): void;
   getPrestartAttendance(meetingId: number): any[];
   addPrestartAttendee(data: any): any;
@@ -404,11 +405,14 @@ class SqliteStorage implements IStorage {
     return this.getPrestartMeeting(id);
   }
   getPrestartPhotos(meetingId: number) {
-    return sqlite.prepare("SELECT id,meeting_id,zone_id,caption,photo_mime,created_at FROM prestart_photos WHERE meeting_id=?").all(meetingId);
+    return sqlite.prepare("SELECT id,meeting_id,zone_id,caption,photo_mime,photo_type,created_at FROM prestart_photos WHERE meeting_id=?").all(meetingId);
   }
   addPrestartPhoto(data: any) {
-    return sqlite.prepare(`INSERT INTO prestart_photos (meeting_id,zone_id,caption,photo_data,photo_mime,created_at) VALUES (?,?,?,?,?,?) RETURNING id,meeting_id,zone_id,caption,photo_mime,created_at`)
-      .get(data.meetingId, data.zoneId ?? null, data.caption ?? null, data.photoData, data.photoMime, now());
+    return sqlite.prepare(`INSERT INTO prestart_photos (meeting_id,zone_id,caption,photo_data,photo_mime,photo_type,created_at) VALUES (?,?,?,?,?,?,?) RETURNING id,meeting_id,zone_id,caption,photo_mime,photo_type,created_at`)
+      .get(data.meetingId, data.zoneId ?? null, data.caption ?? null, data.photoData, data.photoMime, data.photoType ?? null, now());
+  }
+  getPrestartPhotoData(id: number) {
+    return sqlite.prepare("SELECT photo_data,photo_mime FROM prestart_photos WHERE id=?").get(id);
   }
   deletePrestartPhoto(id: number) {
     sqlite.prepare("DELETE FROM prestart_photos WHERE id=?").run(id);
@@ -503,6 +507,9 @@ sqlite.exec(`
     created_by INTEGER NOT NULL
   );
 `);
+
+// ── Migrations: add photo_type column if not yet present ───────────────────
+try { sqlite.exec("ALTER TABLE prestart_photos ADD COLUMN photo_type TEXT"); } catch { /* column already exists */ }
 
 // ── Email storage methods (added to SqliteStorage instance via prototype extension) ──
 const proto = SqliteStorage.prototype as any;

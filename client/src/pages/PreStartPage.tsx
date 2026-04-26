@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import Layout from "./Layout";
@@ -12,12 +12,173 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Plus, HardHat, Upload, Lock, ArrowLeft, Camera, UserPlus, Trash2, MapPin, AlertTriangle, Phone } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Plus, HardHat, Upload, Lock, ArrowLeft, Camera, UserPlus, Trash2, MapPin, AlertTriangle, Phone, Map, ImageIcon, X, ZoomIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ZONE_COLOURS = ["#f59e0b","#3b82f6","#10b981","#ef4444","#8b5cf6","#f97316","#14b8a6","#ec4899"];
 
 function uuid() { return Math.random().toString(36).slice(2,10); }
+
+// ── Photo lightbox ──────────────────────────────────────────────────────────
+function PhotoLightbox({ src, caption, onClose }: { src: string; caption?: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div className="relative max-w-4xl max-h-[90vh] w-full mx-4" onClick={e => e.stopPropagation()}>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute -top-10 right-0 text-white hover:text-white/60"
+          onClick={onClose}
+        >
+          <X className="h-5 w-5" />
+        </Button>
+        <img src={src} alt={caption || "Photo"} className="w-full h-full max-h-[80vh] object-contain rounded-lg" />
+        {caption && (
+          <p className="text-center text-white/80 text-sm mt-2">{caption}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Photo card ──────────────────────────────────────────────────────────────
+function PhotoCard({
+  photo,
+  projectId,
+  meetingId,
+  disabled,
+}: {
+  photo: any;
+  projectId: number;
+  meetingId: number;
+  disabled: boolean;
+}) {
+  const [lightbox, setLightbox] = useState(false);
+  const { toast } = useToast();
+
+  const deleteMut = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/prestart-photos/${photo.id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/prestart/${meetingId}/photos`] });
+      toast({ title: "Photo removed" });
+    },
+  });
+
+  return (
+    <>
+      {lightbox && (
+        <PhotoLightbox
+          src={`/api/prestart-photos/${photo.id}`}
+          caption={photo.caption}
+          onClose={() => setLightbox(false)}
+        />
+      )}
+      <div className="relative group rounded-lg overflow-hidden border border-border/60 bg-muted/20">
+        <img
+          src={`/api/prestart-photos/${photo.id}`}
+          alt={photo.caption || "Photo"}
+          className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={() => setLightbox(true)}
+          data-testid={`prestart-photo-${photo.id}`}
+        />
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <ZoomIn className="h-6 w-6 text-white drop-shadow-md" />
+        </div>
+        {photo.caption && (
+          <div className="px-2 py-1.5 border-t border-border/40">
+            <p className="text-xs text-muted-foreground truncate">{photo.caption}</p>
+          </div>
+        )}
+        {!disabled && (
+          <button
+            className="absolute top-1.5 right-1.5 p-1 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive pointer-events-auto"
+            onClick={() => deleteMut.mutate()}
+            data-testid={`prestart-photo-delete-${photo.id}`}
+            title="Remove photo"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+        {photo.photo_type === "map" && (
+          <div className="absolute top-1.5 left-1.5">
+            <Badge className="text-[10px] px-1 py-0 bg-blue-600/80 text-white border-0">Map</Badge>
+          </div>
+        )}
+        {photo.photo_type === "exclusion" && (
+          <div className="absolute top-1.5 left-1.5">
+            <Badge className="text-[10px] px-1 py-0 bg-red-600/80 text-white border-0">Exclusion</Badge>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Drop zone upload ────────────────────────────────────────────────────────
+function PhotoDropZone({
+  label,
+  icon,
+  accept,
+  onFiles,
+  disabled,
+  multiple,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  accept: string;
+  onFiles: (files: File[]) => void;
+  disabled: boolean;
+  multiple?: boolean;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    if (disabled) return;
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/") || f.type === "application/pdf");
+    if (files.length) onFiles(files);
+  }, [disabled, onFiles]);
+
+  return (
+    <div
+      className={cn(
+        "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-primary/50 hover:bg-muted/30",
+        dragging && "border-primary bg-primary/5"
+      )}
+      onDragOver={e => { e.preventDefault(); if (!disabled) setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+      onClick={() => !disabled && inputRef.current?.click()}
+      data-testid="prestart-drop-zone"
+    >
+      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+        <div className="p-2.5 rounded-full bg-muted/50">{icon}</div>
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-xs">Drag & drop or click to browse</p>
+        <p className="text-xs opacity-60">JPG, PNG, PDF accepted</p>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        className="hidden"
+        onChange={e => {
+          const files = Array.from(e.target.files ?? []);
+          if (files.length) onFiles(files);
+          e.target.value = "";
+        }}
+      />
+    </div>
+  );
+}
 
 export default function PreStartPage() {
   const { id, mid } = useParams<{ id: string; mid?: string }>();
@@ -31,10 +192,11 @@ export default function PreStartPage() {
   const [newForm, setNewForm] = useState({ title: "", meetingDate: new Date().toISOString().split("T")[0] });
   const [showClose, setShowClose] = useState(false);
   const [attendeeForm, setAttendeeForm] = useState({ name: "", company: "", role: "" });
-  const planRef = useRef<HTMLInputElement>(null);
-  const photoRef = useRef<HTMLInputElement>(null);
-  const [photoZone, setPhotoZone] = useState<string | null>(null);
+
+  // Photo upload state
   const [photoCaption, setPhotoCaption] = useState("");
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const planRef = useRef<HTMLInputElement>(null);
 
   const { data: project } = useQuery<any>({ queryKey: [`/api/projects/${pid}`] });
   const { data: meetings = [], isLoading: listLoading } = useQuery<any[]>({ queryKey: [`/api/projects/${pid}/prestart`] });
@@ -61,6 +223,12 @@ export default function PreStartPage() {
   const exclusionZones: any[] = m?.exclusion_zones_json ? JSON.parse(m.exclusion_zones_json) : [];
   const emergencyContacts: any[] = m?.emergency_contacts_json ? JSON.parse(m.emergency_contacts_json) : [];
   const hasPlan = !!(m?.site_plan_data || m?.site_plan_mime);
+
+  // Photo buckets
+  const sitePhotos = photos.filter((p: any) => !p.photo_type || p.photo_type === "site");
+  const mapPhotos = photos.filter((p: any) => p.photo_type === "map");
+  const exclusionPhotos = photos.filter((p: any) => p.photo_type === "exclusion");
+  const zonePhotos = (zoneId: string) => photos.filter((p: any) => p.zone_id === zoneId);
 
   const createMut = useMutation({
     mutationFn: (data: any) => apiRequest("POST", `/api/projects/${pid}/prestart`, data),
@@ -162,27 +330,40 @@ export default function PreStartPage() {
     e.target.value = "";
   }
 
-  // Photo upload
-  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>, zoneId?: string) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const b64 = (ev.target?.result as string).split(",")[1];
-      apiRequest("POST", `/api/projects/${pid}/prestart/${meetingId}/photos`, {
-        photoData: b64, photoMime: file.type, zoneId: zoneId ?? photoZone, caption: photoCaption
-      }).then(() => {
-        queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/prestart/${meetingId}/photos`] });
-        setPhotoCaption("");
-        setPhotoZone(null);
-        toast({ title: "Photo added" });
-      });
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
+  // Generic photo upload — supports multiple files and photo_type
+  async function uploadFiles(files: File[], photoType: string, zoneId?: string) {
+    setUploadingPhotos(true);
+    try {
+      for (const file of files) {
+        await new Promise<void>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = async (ev) => {
+            try {
+              const b64 = (ev.target?.result as string).split(",")[1];
+              await apiRequest("POST", `/api/projects/${pid}/prestart/${meetingId}/photos`, {
+                photoData: b64,
+                photoMime: file.type,
+                zoneId: zoneId ?? null,
+                caption: photoCaption || file.name.replace(/\.[^/.]+$/, ""),
+                photoType,
+              });
+              resolve();
+            } catch (err) { reject(err); }
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/prestart/${meetingId}/photos`] });
+      setPhotoCaption("");
+      toast({ title: `${files.length} photo${files.length > 1 ? "s" : ""} uploaded` });
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploadingPhotos(false);
+    }
   }
 
-  // Meeting list view
+  // ── Meeting list view ────────────────────────────────────────────────────────
   if (!meetingId) {
     return (
       <Layout projectId={pid} projectName={project?.name} breadcrumb="Pre-Start Meetings">
@@ -240,7 +421,7 @@ export default function PreStartPage() {
     );
   }
 
-  // Meeting detail view
+  // ── Meeting detail view ──────────────────────────────────────────────────────
   if (!m) return <Layout projectId={pid} projectName={project?.name}><div className="p-8 text-muted-foreground">Loading…</div></Layout>;
 
   return (
@@ -287,7 +468,8 @@ export default function PreStartPage() {
         )}
 
         <div className="space-y-6">
-          {/* Site Plan */}
+
+          {/* ── Site Plan ─────────────────────────────────────────────── */}
           <section>
             <h2 className="text-sm font-semibold mb-2">Site Plan</h2>
             {hasPlan ? (
@@ -317,7 +499,123 @@ export default function PreStartPage() {
 
           <Separator />
 
-          {/* Active Work Zones */}
+          {/* ── Photos & Maps Gallery ─────────────────────────────────── */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-semibold">Site Photos &amp; Maps</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Upload aerial photos, drone shots, exclusion zone maps, and site photos
+                </p>
+              </div>
+              <Badge variant="outline" className="text-xs">{photos.length} file{photos.length !== 1 ? "s" : ""}</Badge>
+            </div>
+
+            {!isClosed && (
+              <div className="space-y-3 mb-4">
+                {/* Optional caption */}
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Caption / label (optional — applies to next upload)"
+                    value={photoCaption}
+                    onChange={e => setPhotoCaption(e.target.value)}
+                    className="h-8 text-xs flex-1"
+                    data-testid="prestart-photo-caption"
+                  />
+                </div>
+
+                {/* Three upload zones */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <PhotoDropZone
+                    label="Site Photos"
+                    icon={<Camera className="h-5 w-5 text-amber-500" />}
+                    accept="image/*"
+                    multiple
+                    disabled={uploadingPhotos}
+                    onFiles={files => uploadFiles(files, "site")}
+                  />
+                  <PhotoDropZone
+                    label="Maps / Plans"
+                    icon={<Map className="h-5 w-5 text-blue-500" />}
+                    accept="image/*,.pdf"
+                    multiple
+                    disabled={uploadingPhotos}
+                    onFiles={files => uploadFiles(files, "map")}
+                  />
+                  <PhotoDropZone
+                    label="Exclusion Zone Maps"
+                    icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
+                    accept="image/*,.pdf"
+                    multiple
+                    disabled={uploadingPhotos}
+                    onFiles={files => uploadFiles(files, "exclusion")}
+                  />
+                </div>
+
+                {uploadingPhotos && (
+                  <p className="text-xs text-muted-foreground animate-pulse text-center">Uploading…</p>
+                )}
+              </div>
+            )}
+
+            {/* Photo gallery */}
+            {photos.length === 0 ? (
+              <Card className="border-dashed border-border/40">
+                <CardContent className="py-10 text-center">
+                  <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                  <p className="text-sm text-muted-foreground">No photos or maps uploaded yet</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {/* Maps */}
+                {mapPhotos.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <Map className="h-3.5 w-3.5 text-blue-500" /> Maps &amp; Plans ({mapPhotos.length})
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {mapPhotos.map((p: any) => (
+                        <PhotoCard key={p.id} photo={p} projectId={pid} meetingId={meetingId!} disabled={isClosed} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Exclusion zone photos */}
+                {exclusionPhotos.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> Exclusion Zone Maps ({exclusionPhotos.length})
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {exclusionPhotos.map((p: any) => (
+                        <PhotoCard key={p.id} photo={p} projectId={pid} meetingId={meetingId!} disabled={isClosed} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Site photos */}
+                {sitePhotos.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <Camera className="h-3.5 w-3.5 text-amber-500" /> Site Photos ({sitePhotos.length})
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {sitePhotos.map((p: any) => (
+                        <PhotoCard key={p.id} photo={p} projectId={pid} meetingId={meetingId!} disabled={isClosed} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          <Separator />
+
+          {/* ── Active Work Zones ─────────────────────────────────────── */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold">Active Work Zones</h2>
@@ -354,19 +652,32 @@ export default function PreStartPage() {
                         )}
                       </div>
                     </div>
-                    {/* Zone photos */}
+                    {/* Zone-specific photos */}
                     <div className="mt-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {photos.filter((p: any) => p.zone_id === zone.id).map((p: any) => (
+                        {zonePhotos(zone.id).map((p: any) => (
                           <div key={p.id} className="relative group">
-                            <img src={`/api/prestart-photos/${p.id}`} alt={p.caption || "photo"} className="w-16 h-16 object-cover rounded border" />
+                            <img
+                              src={`/api/prestart-photos/${p.id}`}
+                              alt={p.caption || "photo"}
+                              className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-90"
+                            />
                             {p.caption && <p className="text-[10px] text-muted-foreground mt-0.5 truncate w-16">{p.caption}</p>}
                           </div>
                         ))}
                         {!isClosed && (
                           <label className="w-16 h-16 border-2 border-dashed rounded flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors">
                             <Camera className="h-4 w-4 text-muted-foreground/50" />
-                            <input type="file" accept="image/*" className="hidden" onChange={e => handlePhotoUpload(e, zone.id)} />
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => {
+                                const files = Array.from(e.target.files ?? []);
+                                if (files.length) uploadFiles(files, "site", zone.id);
+                                e.target.value = "";
+                              }}
+                            />
                           </label>
                         )}
                       </div>
@@ -379,7 +690,7 @@ export default function PreStartPage() {
 
           <Separator />
 
-          {/* Exclusion Zones */}
+          {/* ── Exclusion Zones ───────────────────────────────────────── */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold">Exclusion Zones</h2>
@@ -420,7 +731,7 @@ export default function PreStartPage() {
 
           <Separator />
 
-          {/* Emergency Contacts */}
+          {/* ── Emergency Contacts ────────────────────────────────────── */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold">Emergency Contacts</h2>
@@ -451,7 +762,7 @@ export default function PreStartPage() {
 
           <Separator />
 
-          {/* General Notes */}
+          {/* ── General Notes ─────────────────────────────────────────── */}
           <section>
             <h2 className="text-sm font-semibold mb-2">General Notes</h2>
             {isClosed ? (
@@ -468,7 +779,7 @@ export default function PreStartPage() {
 
           <Separator />
 
-          {/* Attendance */}
+          {/* ── Attendance ────────────────────────────────────────────── */}
           <section>
             <h2 className="text-sm font-semibold mb-3">Attendance ({attendance.length})</h2>
             {!isClosed && (

@@ -13,6 +13,8 @@ import ProgrammePage from "./pages/ProgrammePage";
 import MaterialPage from "./pages/MaterialPage";
 import PreStartPage from "./pages/PreStartPage";
 import MeetingsPage from "./pages/MeetingsPage";
+import EmailPage from "./pages/EmailPage";
+import RFIPage from "./pages/RFIPage";
 import AdminPage from "./pages/AdminPage";
 
 // ── Auth context ──────────────────────────────────────────────────────────────
@@ -54,6 +56,8 @@ export default function App() {
               <Route path="/projects/:id/prestart/:mid" component={PreStartPage} />
               <Route path="/projects/:id/meetings" component={MeetingsPage} />
               <Route path="/projects/:id/meetings/:mid" component={MeetingsPage} />
+              <Route path="/projects/:id/emails" component={EmailPage} />
+              <Route path="/projects/:id/rfis" component={RFIPage} />
               <Route path="/admin" component={AdminPage} />
               <Route>
                 <div className="flex items-center justify-center h-screen text-muted-foreground">Page not found</div>

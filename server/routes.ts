@@ -457,7 +457,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.get("/api/prestart-photos/:photoId", requireAuth, (req: any, res) => {
-    const r = (storage as any).getPrestartPhotoData?.(parseInt(req.params.photoId));
+    const r = storage.getPrestartPhotoData(parseInt(req.params.photoId));
     if (!r) return res.status(404).json({ error: "Not found" });
     const buf = Buffer.from(r.photo_data, "base64");
     res.set("Content-Type", r.photo_mime || "image/jpeg");
