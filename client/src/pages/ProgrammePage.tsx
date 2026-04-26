@@ -13,11 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
   Upload, CloudRain, RefreshCw, Eye, AlertTriangle, CheckCircle2,
   Loader2, Printer, Calendar, ChevronRight, ArrowRight, TrendingDown, TrendingUp,
-  Search, X, Pencil
+  Search, X, Pencil, Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -513,6 +512,16 @@ export default function ProgrammePage() {
   const [uploadLabel, setUploadLabel] = useState("");
   const [uploadType, setUploadType] = useState("baseline");
 
+  const deleteProgMut = useMutation({
+    mutationFn: (progId: number) => apiRequest("DELETE", `/api/projects/${pid}/programmes/${progId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/programmes`] });
+      setSelectedProgId(null);
+      toast({ title: "Programme version removed" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   // Results
   const [lookaheadResult, setLookaheadResult] = useState<{ tasks: Task[]; from: string; weeks: number; section?: string } | null>(null);
   const [cycleResult, setCycleResult] = useState<{ baseline: Task[]; target: Task[]; originalCycleDays: number; newCycleDays: number } | null>(null);
@@ -698,21 +707,41 @@ export default function ProgrammePage() {
         </div>
 
         {/* Programme version selector */}
-        {programmes.length > 1 && (
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span className="text-xs text-muted-foreground">Viewing:</span>
-            {programmes.map((p: any) => (
+        {programmes.length > 0 && (
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xs text-muted-foreground shrink-0">Viewing:</span>
+            <Select
+              value={String(activeProg)}
+              onValueChange={v => { setSelectedProgId(parseInt(v)); setTab("tasks"); }}
+            >
+              <SelectTrigger className="h-8 text-xs w-auto max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {programmes.map((p: any, i: number) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.label || `Programme ${programmes.length - i}`}
+                    <span className="ml-1.5 text-muted-foreground">({p.type})</span>
+                    {i === 0 && <span className="ml-1.5 text-emerald-600 font-medium">· Latest</span>}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {programmes.length > 1 && (
               <Button
-                key={p.id}
                 size="sm"
-                variant={activeProg === p.id ? "default" : "outline"}
-                className="text-xs h-7"
-                onClick={() => { setSelectedProgId(p.id); setTab("tasks"); }}
+                variant="ghost"
+                className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 gap-1"
+                onClick={() => {
+                  if (activeProg && window.confirm("Delete this programme version? This cannot be undone.")) {
+                    deleteProgMut.mutate(activeProg);
+                  }
+                }}
+                title="Delete this version"
               >
-                {p.label}
-                <Badge variant="outline" className="ml-1 text-[10px] h-4">{p.type}</Badge>
+                <Trash2 className="h-3.5 w-3.5" /> Remove this version
               </Button>
-            ))}
+            )}
           </div>
         )}
 
@@ -878,26 +907,7 @@ export default function ProgrammePage() {
         )}
       </div>
 
-      {/* Upload revision strip */}
-      {programmes.length > 0 && (
-        <div className="px-6 pb-4">
-          <Separator className="mb-4" />
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs text-muted-foreground">Upload new revision:</span>
-            <Input placeholder="Label" className="w-40 h-7 text-xs" value={uploadLabel} onChange={e => setUploadLabel(e.target.value)} />
-            <Select value={uploadType} onValueChange={setUploadType}>
-              <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="baseline">Baseline</SelectItem>
-                <SelectItem value="revision">Revision</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button size="sm" className="h-7 text-xs" onClick={() => fileRef.current?.click()} disabled={uploadMut.isPending}>
-              <Upload className="h-3 w-3 mr-1" /> Upload
-            </Button>
-          </div>
-        </div>
-      )}
+
 
       {/* ── Task Date Edit Dialog ── */}
       <Dialog open={!!editTask} onOpenChange={open => { if (!open) setEditTask(null); }}>

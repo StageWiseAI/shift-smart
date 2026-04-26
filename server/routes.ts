@@ -315,6 +315,12 @@ export function registerRoutes(app: Express) {
     res.json({ ...prog, xmlData: undefined, tasks, cycleDetected: cycle });
   });
 
+  app.delete("/api/projects/:id/programmes/:progId", requireAuth, requireAdmin, (req: any, res) => {
+    storage.deleteProgramme(parseInt(req.params.progId));
+    audit(req, "delete", "programme", req.params.progId, "Programme deleted", parseInt(req.params.id));
+    res.json({ ok: true });
+  });
+
   app.get("/api/projects/:id/programmes/:progId/tasks", requireAuth, (req: any, res) => {
     const prog = storage.getProgrammeById(parseInt(req.params.progId));
     if (!prog) return res.status(404).json({ error: "Not found" });

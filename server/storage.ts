@@ -195,6 +195,7 @@ export interface IStorage {
   getProgrammes(projectId: number): Programme[];
   getProgrammeById(id: number): Programme | undefined;
   createProgramme(data: InsertProgramme): Programme;
+  deleteProgramme(id: number): void;
   updateProgrammeTasks(id: number, tasksJson: string): void;
 
   // EOT
@@ -320,6 +321,11 @@ class SqliteStorage implements IStorage {
   }
 
   // ── Programme ────────────────────────────────────────────────────────────────
+  deleteProgramme(id: number) {
+    sqlite.prepare("DELETE FROM eot_events WHERE programme_id=?").run(id);
+    sqlite.prepare("DELETE FROM cycle_overrides WHERE programme_id=?").run(id);
+    sqlite.prepare("DELETE FROM programmes WHERE id=?").run(id);
+  }
   getProgrammes(projectId: number) {
     return sqlite.prepare("SELECT * FROM programmes WHERE project_id=? ORDER BY uploaded_at DESC").all(projectId) as Programme[];
   }
