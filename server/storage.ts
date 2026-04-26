@@ -575,6 +575,9 @@ proto.updateEmail = function(id: number, data: any) {
 proto.deleteEmail = function(id: number) {
   sqlite.prepare("DELETE FROM emails WHERE id=?").run(id);
 };
+proto.deleteRfi = function(id: number) {
+  sqlite.prepare("DELETE FROM rfis WHERE id=?").run(id);
+};
 
 // ── RFI storage methods ───────────────────────────────────────────────────────
 proto.getRfis = function(projectId: number) {
