@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 
 // Lazy client — reads env var at call time so Railway env is always current
 function getOpenAI(): OpenAI {
@@ -96,14 +96,19 @@ ${minutesText}`;
 
 // ── Audio transcription (Whisper) ─────────────────────────────────────────────
 export async function transcribeAudio(audioBase64: string, mimeType: string): Promise<string> {
-  // Convert base64 to buffer then to File-like object
+  // Use Buffer + filename tuple — Node.js doesn't have the browser File API
   const buffer = Buffer.from(audioBase64, "base64");
-  const blob = new Blob([buffer], { type: mimeType });
-  const file = new File([blob], "recording.webm", { type: mimeType });
+  // Determine file extension from mimeType for Whisper to identify the format
+  const ext = mimeType.includes("mp4") ? "mp4"
+    : mimeType.includes("mp3") || mimeType.includes("mpeg") ? "mp3"
+    : mimeType.includes("wav") ? "wav"
+    : mimeType.includes("ogg") ? "ogg"
+    : mimeType.includes("m4a") ? "m4a"
+    : "webm";
 
   const response = await getOpenAI().audio.transcriptions.create({
     model: "whisper-1",
-    file,
+    file: await toFile(buffer, `recording.${ext}`, { type: mimeType }),
     language: "en",
   });
 
