@@ -955,7 +955,7 @@ export default function ProgrammePage() {
                           <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs whitespace-nowrap">Finish</th>
                           <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Progress</th>
                           <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Type</th>
-                          <th className="py-2 px-2 w-8" />
+                          <th className="py-2 px-2 text-left font-semibold text-muted-foreground text-xs whitespace-nowrap">Update Progress</th>
                         </tr>
                       </thead>
                       <tbody>
