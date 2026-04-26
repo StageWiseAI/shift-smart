@@ -718,7 +718,7 @@ export function registerRoutes(app: Express) {
   });
 
 
-  app.get("/api/version", (_req, res) => res.json({ version: "deploy-2-multer", built: "20260426131151" }));
+  app.get("/api/version", (_req, res) => res.json({ version: "deploy-2-multer", built: "20260426132408" }));
 
   return httpServer;
 }
