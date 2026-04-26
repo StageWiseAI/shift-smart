@@ -451,3 +451,101 @@ class SqliteStorage implements IStorage {
 }
 
 export const storage = new SqliteStorage();
+
+// Bootstrap email + RFI tables (appended for Deploy 2)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS emails (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    raw_text TEXT NOT NULL,
+    from_address TEXT,
+    subject TEXT,
+    received_date TEXT,
+    summary TEXT,
+    key_points TEXT,
+    has_rfi INTEGER NOT NULL DEFAULT 0,
+    analysis_status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT '',
+    created_by INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS rfis (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    rfi_number TEXT,
+    title TEXT NOT NULL,
+    description TEXT,
+    raised_by TEXT,
+    source_type TEXT NOT NULL,
+    source_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'open',
+    response TEXT,
+    due_date TEXT,
+    closed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT '',
+    created_by INTEGER NOT NULL
+  );
+`);
+
+// ── Email storage methods (added to SqliteStorage instance via prototype extension) ──
+const proto = SqliteStorage.prototype as any;
+
+proto.getEmails = function(projectId: number) {
+  return sqlite.prepare("SELECT * FROM emails WHERE project_id=? ORDER BY created_at DESC").all(projectId);
+};
+proto.getEmailById = function(id: number) {
+  return sqlite.prepare("SELECT * FROM emails WHERE id=?").get(id);
+};
+proto.createEmail = function(data: any) {
+  return sqlite.prepare(
+    `INSERT INTO emails (project_id,raw_text,from_address,subject,received_date,analysis_status,created_at,created_by)
+     VALUES (?,?,?,?,?,?,?,?) RETURNING *`
+  ).get(data.projectId, data.rawText, data.fromAddress ?? null, data.subject ?? null,
+    data.receivedDate ?? null, "pending", now(), data.createdBy);
+};
+proto.updateEmail = function(id: number, data: any) {
+  const e: any = proto.getEmailById.call(this, id);
+  if (!e) return undefined;
+  sqlite.prepare(
+    `UPDATE emails SET from_address=?,subject=?,received_date=?,summary=?,key_points=?,has_rfi=?,analysis_status=? WHERE id=?`
+  ).run(
+    data.fromAddress ?? e.from_address, data.subject ?? e.subject,
+    data.receivedDate ?? e.received_date, data.summary ?? e.summary,
+    data.keyPoints ?? e.key_points, data.hasRfi ?? e.has_rfi,
+    data.analysisStatus ?? e.analysis_status, id
+  );
+  return proto.getEmailById.call(this, id);
+};
+proto.deleteEmail = function(id: number) {
+  sqlite.prepare("DELETE FROM emails WHERE id=?").run(id);
+};
+
+// ── RFI storage methods ───────────────────────────────────────────────────────
+proto.getRfis = function(projectId: number) {
+  return sqlite.prepare("SELECT * FROM rfis WHERE project_id=? ORDER BY created_at DESC").all(projectId);
+};
+proto.getRfiById = function(id: number) {
+  return sqlite.prepare("SELECT * FROM rfis WHERE id=?").get(id);
+};
+proto.createRfi = function(data: any) {
+  // Auto-number: RFI-001, RFI-002 etc.
+  const count = (sqlite.prepare("SELECT COUNT(*) as c FROM rfis WHERE project_id=?").get(data.projectId) as any).c;
+  const rfiNumber = `RFI-${String(count + 1).padStart(3, "0")}`;
+  return sqlite.prepare(
+    `INSERT INTO rfis (project_id,rfi_number,title,description,raised_by,source_type,source_id,status,due_date,created_at,created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING *`
+  ).get(data.projectId, rfiNumber, data.title, data.description ?? null, data.raisedBy ?? null,
+    data.sourceType, data.sourceId ?? null, "open", data.dueDate ?? null, now(), data.createdBy);
+};
+proto.updateRfi = function(id: number, data: any) {
+  const r: any = proto.getRfiById.call(this, id);
+  if (!r) return undefined;
+  sqlite.prepare(
+    `UPDATE rfis SET title=?,description=?,raised_by=?,status=?,response=?,due_date=?,closed_at=? WHERE id=?`
+  ).run(
+    data.title ?? r.title, data.description ?? r.description,
+    data.raisedBy ?? r.raised_by, data.status ?? r.status,
+    data.response ?? r.response, data.dueDate ?? r.due_date,
+    data.status === "closed" ? now() : r.closed_at, id
+  );
+  return proto.getRfiById.call(this, id);
+};

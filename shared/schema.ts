@@ -189,3 +189,43 @@ export const auditLog = sqliteTable("audit_log", {
   detail: text("detail"),
   createdAt: text("created_at").notNull().default(""),
 });
+
+// ─── Emails ───────────────────────────────────────────────────────────────────
+
+export const emails = sqliteTable("emails", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  rawText: text("raw_text").notNull(),
+  fromAddress: text("from_address"),
+  subject: text("subject"),
+  receivedDate: text("received_date"),
+  summary: text("summary"),
+  keyPoints: text("key_points"),       // JSON string[]
+  hasRfi: integer("has_rfi").notNull().default(0),
+  analysisStatus: text("analysis_status").notNull().default("pending"),
+  createdAt: text("created_at").notNull().default(""),
+  createdBy: integer("created_by").notNull(),
+});
+
+export type Email = typeof emails.$inferSelect;
+
+// ─── RFIs ─────────────────────────────────────────────────────────────────────
+
+export const rfis = sqliteTable("rfis", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  rfiNumber: text("rfi_number"),
+  title: text("title").notNull(),
+  description: text("description"),
+  raisedBy: text("raised_by"),
+  sourceType: text("source_type").notNull(),   // email | meeting
+  sourceId: integer("source_id"),
+  status: text("status").notNull().default("open"),
+  response: text("response"),
+  dueDate: text("due_date"),
+  closedAt: text("closed_at"),
+  createdAt: text("created_at").notNull().default(""),
+  createdBy: integer("created_by").notNull(),
+});
+
+export type Rfi = typeof rfis.$inferSelect;

@@ -458,5 +458,205 @@ export function registerRoutes(app: Express) {
     res.json(storage.getAuditLog(pid));
   });
 
+  // ── Emails ────────────────────────────────────────────────────────────────────
+  app.get("/api/projects/:id/emails", requireAuth, (req: any, res) => {
+    res.json((storage as any).getEmails(parseInt(req.params.id)));
+  });
+
+  app.post("/api/projects/:id/emails", requireAuth, async (req: any, res) => {
+    const { rawText } = req.body;
+    if (!rawText || !rawText.trim()) return res.status(400).json({ error: "Email text is required" });
+
+    // Create the email record first (pending status)
+    const email = (storage as any).createEmail({
+      projectId: parseInt(req.params.id),
+      rawText,
+      createdBy: req.user.id,
+    });
+
+    // Kick off AI analysis asynchronously so we can respond immediately
+    (async () => {
+      try {
+        const { analyseEmail } = await import("./ai");
+        const analysis = await analyseEmail(rawText);
+        (storage as any).updateEmail(email.id, {
+          fromAddress: analysis.fromAddress,
+          subject: analysis.subject,
+          receivedDate: analysis.receivedDate,
+          summary: analysis.summary,
+          keyPoints: JSON.stringify(analysis.keyPoints),
+          hasRfi: analysis.hasRfi ? 1 : 0,
+          analysisStatus: "done",
+        });
+
+        // Auto-create RFIs if detected
+        if (analysis.hasRfi && analysis.rfis.length > 0) {
+          for (const rfi of analysis.rfis) {
+            (storage as any).createRfi({
+              projectId: parseInt(req.params.id),
+              title: rfi.title,
+              description: rfi.description,
+              raisedBy: rfi.raisedBy,
+              sourceType: "email",
+              sourceId: email.id,
+              createdBy: req.user.id,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Email AI analysis failed:", err);
+        (storage as any).updateEmail(email.id, { analysisStatus: "error" });
+      }
+    })();
+
+    res.json(email);
+  });
+
+  app.get("/api/projects/:id/emails/:eid", requireAuth, (req: any, res) => {
+    const email = (storage as any).getEmailById(parseInt(req.params.eid));
+    if (!email) return res.status(404).json({ error: "Not found" });
+    res.json(email);
+  });
+
+  app.delete("/api/projects/:id/emails/:eid", requireAuth, (req: any, res) => {
+    (storage as any).deleteEmail(parseInt(req.params.eid));
+    res.json({ ok: true });
+  });
+
+  // Re-analyse an email (in case it errored or user wants fresh analysis)
+  app.post("/api/projects/:id/emails/:eid/analyse", requireAuth, async (req: any, res) => {
+    const email = (storage as any).getEmailById(parseInt(req.params.eid)) as any;
+    if (!email) return res.status(404).json({ error: "Not found" });
+
+    // Set to pending while analysing
+    (storage as any).updateEmail(email.id, { analysisStatus: "pending" });
+    res.json({ ok: true, status: "pending" });
+
+    (async () => {
+      try {
+        const { analyseEmail } = await import("./ai");
+        const analysis = await analyseEmail(email.raw_text);
+        (storage as any).updateEmail(email.id, {
+          fromAddress: analysis.fromAddress,
+          subject: analysis.subject,
+          receivedDate: analysis.receivedDate,
+          summary: analysis.summary,
+          keyPoints: JSON.stringify(analysis.keyPoints),
+          hasRfi: analysis.hasRfi ? 1 : 0,
+          analysisStatus: "done",
+        });
+
+        if (analysis.hasRfi && analysis.rfis.length > 0) {
+          for (const rfi of analysis.rfis) {
+            (storage as any).createRfi({
+              projectId: parseInt(req.params.id),
+              title: rfi.title,
+              description: rfi.description,
+              raisedBy: rfi.raisedBy,
+              sourceType: "email",
+              sourceId: email.id,
+              createdBy: req.user.id,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Email re-analysis failed:", err);
+        (storage as any).updateEmail(email.id, { analysisStatus: "error" });
+      }
+    })();
+  });
+
+  // ── RFIs ──────────────────────────────────────────────────────────────────────
+  app.get("/api/projects/:id/rfis", requireAuth, (req: any, res) => {
+    res.json((storage as any).getRfis(parseInt(req.params.id)));
+  });
+
+  app.post("/api/projects/:id/rfis", requireAuth, (req: any, res) => {
+    const rfi = (storage as any).createRfi({
+      ...req.body,
+      projectId: parseInt(req.params.id),
+      createdBy: req.user.id,
+    });
+    res.json(rfi);
+  });
+
+  app.patch("/api/projects/:id/rfis/:rid", requireAuth, (req: any, res) => {
+    const rfi = (storage as any).updateRfi(parseInt(req.params.rid), req.body);
+    if (!rfi) return res.status(404).json({ error: "Not found" });
+    res.json(rfi);
+  });
+
+  app.delete("/api/projects/:id/rfis/:rid", requireAuth, (req: any, res) => {
+    (storage as any).deleteRfi(parseInt(req.params.rid));
+    res.json({ ok: true });
+  });
+
+  // ── Minutes AI analysis ───────────────────────────────────────────────────────
+  // Called from MeetingsPage when user triggers AI summarise on a saved meeting
+  app.post("/api/projects/:id/meetings/:mid/analyse", requireAuth, async (req: any, res) => {
+    const meeting = storage.getMeetingById(parseInt(req.params.mid)) as any;
+    if (!meeting) return res.status(404).json({ error: "Not found" });
+
+    const { audioBase64, mimeType } = req.body;
+    let minutesText = meeting.minutes ?? "";
+
+    // If audio is supplied, transcribe first then combine
+    if (audioBase64) {
+      try {
+        const { transcribeAudio } = await import("./ai");
+        const transcript = await transcribeAudio(audioBase64, mimeType ?? "audio/webm");
+        minutesText = minutesText ? `${minutesText}\n\n[Transcript]\n${transcript}` : `[Transcript]\n${transcript}`;
+        storage.updateMeeting(meeting.id, { minutes: minutesText });
+      } catch (err) {
+        console.error("Whisper transcription failed:", err);
+        return res.status(500).json({ error: "Transcription failed" });
+      }
+    }
+
+    if (!minutesText.trim()) {
+      return res.status(400).json({ error: "No minutes text or audio to analyse" });
+    }
+
+    try {
+      const { analyseMinutes } = await import("./ai");
+      const analysis = await analyseMinutes(minutesText);
+
+      // Store summary + actions back on the meeting
+      storage.updateMeeting(meeting.id, {
+        summary: analysis.summary,
+        actions: JSON.stringify(analysis.actions),
+      });
+
+      // Auto-create RFIs from minutes if detected
+      if (analysis.hasRfi && analysis.rfis.length > 0) {
+        for (const rfi of analysis.rfis) {
+          (storage as any).createRfi({
+            projectId: parseInt(req.params.id),
+            title: rfi.title,
+            description: rfi.description,
+            raisedBy: rfi.raisedBy,
+            sourceType: "meeting",
+            sourceId: meeting.id,
+            createdBy: req.user.id,
+          });
+        }
+      }
+
+      res.json({
+        summary: analysis.summary,
+        decisions: analysis.decisions,
+        actions: analysis.actions,
+        attendeesSuggested: analysis.attendeesSuggested,
+        hasRfi: analysis.hasRfi,
+        rfisCreated: analysis.rfis.length,
+        minutesText,
+      });
+    } catch (err) {
+      console.error("Minutes analysis failed:", err);
+      res.status(500).json({ error: "Analysis failed" });
+    }
+  });
+
+
   return httpServer;
 }

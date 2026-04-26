@@ -40,7 +40,7 @@ export default function LoginPage() {
             </svg>
             <span className="text-2xl font-bold text-white tracking-tight">Site Smart</span>
           </div>
-          <p className="text-sm text-white/50">Powered by TrustShyft™</p>
+          <p className="text-sm text-white/50">powered by TrustShyft™</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-2xl p-8 space-y-5">

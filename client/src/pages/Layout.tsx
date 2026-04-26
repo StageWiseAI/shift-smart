@@ -67,7 +67,7 @@ export default function Layout({ children, projectId, projectName, breadcrumb }:
           <SiteLogo />
           <div>
             <div className="text-sm font-bold text-white leading-none">Site Smart</div>
-            <div className="text-[10px] text-white/40 leading-none mt-0.5">TrustShyft™</div>
+            <div className="text-[10px] text-white/40 leading-none mt-0.5">powered by TrustShyft™</div>
           </div>
         </div>
 
