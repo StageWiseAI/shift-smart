@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Site Smart — deep navy + amber accent, construction-grade */
+    --background: 220 20% 97%;
+    --foreground: 220 30% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 30% 12%;
+    --primary: 215 60% 22%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 92%;
+    --secondary-foreground: 220 30% 20%;
+    --muted: 220 15% 94%;
+    --muted-foreground: 220 15% 46%;
+    --accent: 38 95% 52%;
+    --accent-foreground: 220 30% 12%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 215 60% 22%;
+    --radius: 0.5rem;
+
+    /* Sidebar */
+    --sidebar-background: 215 60% 18%;
+    --sidebar-foreground: 220 20% 90%;
+    --sidebar-primary: 38 95% 52%;
+    --sidebar-primary-foreground: 220 30% 12%;
+    --sidebar-accent: 215 50% 26%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 215 50% 24%;
+    --sidebar-ring: 38 95% 52%;
+  }
+
+  .dark {
+    --background: 220 30% 8%;
+    --foreground: 220 15% 92%;
+    --card: 220 28% 11%;
+    --card-foreground: 220 15% 92%;
+    --popover: 220 28% 11%;
+    --popover-foreground: 220 15% 92%;
+    --primary: 38 95% 52%;
+    --primary-foreground: 220 30% 8%;
+    --secondary: 220 25% 18%;
+    --secondary-foreground: 220 15% 85%;
+    --muted: 220 25% 16%;
+    --muted-foreground: 220 15% 52%;
+    --accent: 38 95% 52%;
+    --accent-foreground: 220 30% 8%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 25% 22%;
+    --input: 220 25% 22%;
+    --ring: 38 95% 52%;
+
+    --sidebar-background: 220 30% 6%;
+    --sidebar-foreground: 220 15% 88%;
+    --sidebar-primary: 38 95% 52%;
+    --sidebar-primary-foreground: 220 30% 6%;
+    --sidebar-accent: 220 28% 14%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 220 28% 13%;
+    --sidebar-ring: 38 95% 52%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; font-family: 'Inter', system-ui, sans-serif; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
