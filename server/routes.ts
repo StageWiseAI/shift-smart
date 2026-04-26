@@ -276,9 +276,8 @@ export function registerRoutes(app: Express) {
 
   // ── Programme ─────────────────────────────────────────────────────────────────
   app.get("/api/projects/:id/programmes", requireAuth, (req: any, res) => {
-    const programmes = storage.getProgrammes(parseInt(req.params.id));
-    // Don't return full XML in list
-    res.json(programmes.map(p => ({ ...p, xmlData: undefined, tasksJson: undefined })));
+    // xml_data and tasks_json are excluded at the query level — metadata only
+    res.json(storage.getProgrammes(parseInt(req.params.id)));
   });
 
   app.post("/api/projects/:id/programmes/upload", requireAuth, upload.single("file"), (req: any, res) => {

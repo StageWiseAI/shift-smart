@@ -327,7 +327,10 @@ class SqliteStorage implements IStorage {
     sqlite.prepare("DELETE FROM programmes WHERE id=?").run(id);
   }
   getProgrammes(projectId: number) {
-    return sqlite.prepare("SELECT * FROM programmes WHERE project_id=? ORDER BY uploaded_at DESC").all(projectId) as Programme[];
+    // Exclude xml_data and tasks_json — they can be megabytes and are not needed for the list
+    return sqlite.prepare(
+      "SELECT id, project_id, label, type, uploaded_at, uploaded_by, cycle_detected_days FROM programmes WHERE project_id=? ORDER BY uploaded_at DESC"
+    ).all(projectId) as Programme[];
   }
   getProgrammeById(id: number) {
     return sqlite.prepare("SELECT * FROM programmes WHERE id=?").get(id) as Programme | undefined;
