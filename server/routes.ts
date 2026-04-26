@@ -802,7 +802,8 @@ export function registerRoutes(app: Express) {
     if (!meeting) return res.status(404).json({ error: "Not found" });
 
     const { audioBase64, mimeType } = req.body;
-    let minutesText = meeting.minutes ?? "";
+    // SQLite SELECT * returns snake_case — use minutes_text
+    let minutesText = (meeting as any).minutes_text ?? "";
 
     // If audio is supplied, transcribe first then combine
     if (audioBase64) {
@@ -810,25 +811,26 @@ export function registerRoutes(app: Express) {
         const { transcribeAudio } = await import("./ai");
         const transcript = await transcribeAudio(audioBase64, mimeType ?? "audio/webm");
         minutesText = minutesText ? `${minutesText}\n\n[Transcript]\n${transcript}` : `[Transcript]\n${transcript}`;
-        storage.updateMeeting(meeting.id, { minutes: minutesText });
-      } catch (err) {
+        // updateMeeting expects camelCase (InsertMeeting type)
+        storage.updateMeeting(meeting.id, { minutesText });
+      } catch (err: any) {
         console.error("Whisper transcription failed:", err);
-        return res.status(500).json({ error: "Transcription failed" });
+        return res.status(500).json({ error: `Transcription failed: ${err?.message ?? err}` });
       }
     }
 
     if (!minutesText.trim()) {
-      return res.status(400).json({ error: "No minutes text or audio to analyse" });
+      return res.status(400).json({ error: "No meeting notes or recording found to analyse. Add some notes or record the meeting first." });
     }
 
     try {
       const { analyseMinutes } = await import("./ai");
       const analysis = await analyseMinutes(minutesText);
 
-      // Store summary + actions back on the meeting
+      // Store actions back on the meeting (actionsJson is camelCase for updateMeeting)
       storage.updateMeeting(meeting.id, {
-        summary: analysis.summary,
-        actions: JSON.stringify(analysis.actions),
+        actionsJson: JSON.stringify(analysis.actions),
+        minutesText,
       });
 
       // Auto-create RFIs from minutes if detected

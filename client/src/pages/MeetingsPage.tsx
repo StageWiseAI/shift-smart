@@ -136,8 +136,8 @@ export default function MeetingsPage() {
     try {
       const body: any = {};
       if (audioBase64) { body.audioBase64 = audioBase64; body.mimeType = mimeType; }
-      const res = await apiRequest("POST", `/api/projects/${pid}/meetings/${meetingId}/analyse`, body);
-      const data = await res.json();
+      // apiRequest already parses JSON and throws on non-2xx
+      const data = await apiRequest("POST", `/api/projects/${pid}/meetings/${meetingId}/analyse`, body);
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/meetings/${meetingId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/meetings`] });
       toast({
@@ -163,12 +163,17 @@ export default function MeetingsPage() {
         const reader = new FileReader();
         reader.onload = async ev => {
           const b64 = (ev.target?.result as string).split(",")[1];
-          // Save audio first
-          await updateMut.mutateAsync({ audioData: b64, audioMime: "audio/webm" });
-          toast({ title: "Recording saved — extracting actions…" });
-          // Then auto-extract
-          await runExtract(b64, "audio/webm");
+          try {
+            // Save audio to meeting record first
+            await updateMut.mutateAsync({ audioData: b64, audioMime: "audio/webm" });
+            toast({ title: "Recording saved — transcribing and extracting actions…" });
+            // Then send audio to Whisper + GPT via analyse route
+            await runExtract(b64, "audio/webm");
+          } catch (err: any) {
+            toast({ title: "Processing failed", description: err?.message ?? "Could not process recording", variant: "destructive" });
+          }
         };
+        reader.onerror = () => toast({ title: "Could not read recording", variant: "destructive" });
         reader.readAsDataURL(blob);
       };
       mr.start();
