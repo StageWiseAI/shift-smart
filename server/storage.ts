@@ -466,16 +466,23 @@ class SqliteStorage implements IStorage {
         null, null, data.actionsJson ?? "[]", data.status ?? "draft", now(), data.createdBy) as Meeting;
   }
   updateMeeting(id: number, data: Partial<InsertMeeting>) {
-    const m = this.getMeetingById(id);
+    const m = this.getMeetingById(id) as any;
     if (!m) return undefined;
+    // SQLite SELECT * returns snake_case — use snake_case field names as fallbacks
     sqlite.prepare(`UPDATE meetings SET meeting_date=?,meeting_time=?,title=?,type=?,attendees_json=?,agenda_json=?,minutes_text=?,audio_data=?,audio_mime=?,actions_json=?,status=? WHERE id=?`)
       .run(
-        data.meetingDate ?? m.meetingDate, data.meetingTime ?? m.meetingTime,
-        data.title ?? m.title, data.type ?? m.type,
-        data.attendeesJson ?? m.attendeesJson, data.agendaJson ?? m.agendaJson,
-        data.minutesText ?? m.minutesText,
-        (data as any).audioData ?? m.audioData, (data as any).audioMime ?? m.audioMime,
-        data.actionsJson ?? m.actionsJson, data.status ?? m.status, id
+        data.meetingDate ?? m.meeting_date,
+        data.meetingTime ?? m.meeting_time,
+        data.title ?? m.title,
+        data.type ?? m.type,
+        data.attendeesJson ?? m.attendees_json,
+        data.agendaJson ?? m.agenda_json,
+        data.minutesText ?? m.minutes_text,
+        (data as any).audioData ?? m.audio_data,
+        (data as any).audioMime ?? m.audio_mime,
+        data.actionsJson ?? m.actions_json,
+        data.status ?? m.status,
+        id
       );
     return this.getMeetingById(id);
   }
