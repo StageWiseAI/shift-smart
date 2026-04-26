@@ -16,7 +16,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
   Upload, CloudRain, RefreshCw, Eye, AlertTriangle, CheckCircle2,
-  Loader2, Printer, Calendar, ChevronRight, ArrowRight, TrendingDown, TrendingUp
+  Loader2, Printer, Calendar, ChevronRight, ArrowRight, TrendingDown, TrendingUp,
+  Search, X, Pencil
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -59,10 +60,10 @@ function addDays(date: Date, days: number) {
 }
 
 // ── Plain task table row ─────────────────────────────────────────────────────
-function TaskRow({ task, depth }: { task: Task; depth: number }) {
+function TaskRow({ task, depth, onEdit }: { task: Task; depth: number; onEdit?: (t: Task) => void }) {
   return (
     <tr className={cn(
-      "border-b border-border/40 hover:bg-muted/20 transition-colors",
+      "border-b border-border/40 hover:bg-muted/20 transition-colors group",
       task.isSummary && "bg-muted/30 font-medium",
       task.isMilestone && "bg-amber-50/60 dark:bg-amber-950/20",
     )}>
@@ -84,6 +85,17 @@ function TaskRow({ task, depth }: { task: Task; depth: number }) {
       <td className="py-1.5 px-3">
         {task.isMilestone && <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-300">Milestone</Badge>}
         {task.isSummary && !task.isMilestone && <Badge variant="outline" className="text-[10px] h-4">Summary</Badge>}
+      </td>
+      <td className="py-1.5 px-2 w-8">
+        {onEdit && (
+          <button
+            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all"
+            onClick={() => onEdit(task)}
+            title="Edit dates"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -485,6 +497,13 @@ export default function ProgrammePage() {
   const [showCycle, setShowCycle] = useState(false);
   const [showLookahead, setShowLookahead] = useState(false);
 
+  // Search
+  const [search, setSearch] = useState("");
+
+  // Task date edit
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [editDateForm, setEditDateForm] = useState({ newStart: "", newFinish: "" });
+
   // EOT form
   const [eotForm, setEotForm] = useState({ type: "weather", description: "", delayHours: "8", appliedFrom: "" });
   // Cycle form
@@ -582,6 +601,40 @@ export default function ProgrammePage() {
   function handleCycle(e: React.FormEvent) {
     e.preventDefault();
     cycleMut.mutate({ newCycleDays: parseFloat(cycleForm.newCycleDays) });
+  }
+
+
+  // ── Task date edit ───────────────────────────────────────────────────────────
+  const taskDateMut = useMutation({
+    mutationFn: (data: { uid: string; newStart: string; newFinish?: string }) =>
+      apiRequest("PATCH", `/api/projects/${pid}/programmes/${activeProg}/tasks/${encodeURIComponent(data.uid)}`, {
+        newStart: data.newStart,
+        newFinish: data.newFinish || undefined,
+      }).then((r: any) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/programmes/${activeProg}/tasks`] });
+      setEditTask(null);
+      toast({ title: "Task dates updated", description: "Downstream tasks shifted accordingly" });
+    },
+    onError: (e: any) => toast({ title: "Error updating task", description: e.message, variant: "destructive" }),
+  });
+
+  function handleTaskDateEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editTask || !editDateForm.newStart) return;
+    taskDateMut.mutate({
+      uid: editTask.uid,
+      newStart: editDateForm.newStart,
+      newFinish: editDateForm.newFinish || undefined,
+    });
+  }
+
+  function openTaskEdit(task: Task) {
+    setEditTask(task);
+    setEditDateForm({
+      newStart: task.start?.split("T")[0] ?? "",
+      newFinish: task.finish?.split("T")[0] ?? "",
+    });
   }
 
   // ── Lookahead ─────────────────────────────────────────────────────────────
@@ -693,27 +746,63 @@ export default function ProgrammePage() {
               {tasksLoading ? (
                 <div className="h-40 bg-muted rounded-lg animate-pulse mt-4" />
               ) : (
-                <div className="mt-4 border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Activity</th>
-                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs whitespace-nowrap">Start</th>
-                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs whitespace-nowrap">Finish</th>
-                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Progress</th>
-                        <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Type</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tasks.length === 0 ? (
-                        <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No tasks found in programme</td></tr>
-                      ) : tasks.map(t => (
-                        <TaskRow key={t.uid} task={t} depth={(t.outlineLevel ?? 1) - 1} />
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="p-3 text-xs text-muted-foreground border-t bg-muted/20">
-                    {tasks.length} tasks · {tasks.filter(t => t.isMilestone).length} milestones · {tasks.filter(t => t.isCritical).length} critical path
+                <div className="mt-4 space-y-3">
+                  {/* Search bar */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      placeholder="Search tasks, milestones, sections…"
+                      className="pl-9 pr-9 h-9"
+                      data-testid="programme-search"
+                    />
+                    {search && (
+                      <button
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setSearch("")}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Activity</th>
+                          <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs whitespace-nowrap">Start</th>
+                          <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs whitespace-nowrap">Finish</th>
+                          <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Progress</th>
+                          <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Type</th>
+                          <th className="py-2 px-2 w-8" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const filtered = search.trim()
+                            ? tasks.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
+                            : tasks;
+                          if (filtered.length === 0) return (
+                            <tr><td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">
+                              {search ? `No tasks matching "${search}"` : "No tasks found in programme"}
+                            </td></tr>
+                          );
+                          return filtered.map(t => (
+                            <TaskRow key={t.uid} task={t} depth={(t.outlineLevel ?? 1) - 1} onEdit={openTaskEdit} />
+                          ));
+                        })()}
+                      </tbody>
+                    </table>
+                    <div className="p-3 text-xs text-muted-foreground border-t bg-muted/20 flex items-center gap-3">
+                      <span>{tasks.length} tasks</span>
+                      <span>·</span>
+                      <span>{tasks.filter(t => t.isMilestone).length} milestones</span>
+                      <span>·</span>
+                      <span>{tasks.filter(t => t.isCritical).length} critical path</span>
+                      {search && <span className="ml-auto text-primary font-medium">{tasks.filter(t => t.name.toLowerCase().includes(search.toLowerCase())).length} matching</span>}
+                    </div>
                   </div>
                 </div>
               )}
@@ -809,6 +898,56 @@ export default function ProgrammePage() {
           </div>
         </div>
       )}
+
+      {/* ── Task Date Edit Dialog ── */}
+      <Dialog open={!!editTask} onOpenChange={open => { if (!open) setEditTask(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Task Dates</DialogTitle>
+          </DialogHeader>
+          {editTask && (
+            <form onSubmit={handleTaskDateEdit} className="space-y-4 mt-2">
+              <div className="p-3 bg-muted rounded-lg text-sm">
+                <p className="font-medium truncate">{editTask.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Current: {fmtDate(editTask.start)} → {fmtDate(editTask.finish)}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>New Start Date <span className="text-destructive">*</span></Label>
+                  <Input
+                    type="date"
+                    value={editDateForm.newStart}
+                    onChange={e => setEditDateForm(f => ({ ...f, newStart: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>New Finish Date</Label>
+                  <Input
+                    type="date"
+                    value={editDateForm.newFinish}
+                    onChange={e => setEditDateForm(f => ({ ...f, newFinish: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">Leave blank to keep original duration</p>
+                </div>
+              </div>
+              <div className="p-3 bg-amber-50 dark:bg-amber-950 rounded-lg text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                All tasks that follow this task will be shifted by the same number of days to maintain programme sequencing.
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditTask(null)}>Cancel</Button>
+                <Button type="submit" disabled={taskDateMut.isPending || !editDateForm.newStart}>
+                  {taskDateMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Update Dates
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── EOT Dialog ── */}
       <Dialog open={showEOT} onOpenChange={setShowEOT}>

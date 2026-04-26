@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, FolderOpen, CalendarDays, Building2, ChevronRight, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, FolderOpen, CalendarDays, Building2, ChevronRight, Trash2, Pencil } from "lucide-react";
 
 interface Project {
   id: number;
@@ -23,16 +24,23 @@ interface Project {
   status: string;
 }
 
+const emptyForm = { name: "", contractNumber: "", client: "", startDate: "", endDate: "" };
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+
   const [showNew, setShowNew] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", contractNumber: "", client: "", startDate: "", endDate: "" });
+  const [editProject, setEditProject] = useState<Project | null>(null);
+
+  const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState({ name: "", contractNumber: "", client: "", startDate: "", endDate: "", status: "active" });
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({ queryKey: ["/api/projects"] });
 
+  // ── Delete ────────────────────────────────────────────────────────────────
   const deleteProject = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/projects/${id}`),
     onSuccess: () => {
@@ -42,14 +50,27 @@ export default function DashboardPage() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  // ── Create ────────────────────────────────────────────────────────────────
   const createProject = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/projects", data),
+    mutationFn: (data: any) => apiRequest("POST", "/api/projects", data).then(r => r.json()),
     onSuccess: (p) => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       toast({ title: "Project created" });
       setShowNew(false);
-      setForm({ name: "", contractNumber: "", client: "", startDate: "", endDate: "" });
+      setForm(emptyForm);
       navigate(`/projects/${p.id}`);
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  // ── Update ────────────────────────────────────────────────────────────────
+  const updateProject = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      apiRequest("PATCH", `/api/projects/${id}`, data).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({ title: "Project updated" });
+      setEditProject(null);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -58,6 +79,25 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!form.name.trim()) return;
     createProject.mutate(form);
+  }
+
+  function handleEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editProject || !editForm.name.trim()) return;
+    updateProject.mutate({ id: editProject.id, data: editForm });
+  }
+
+  function openEdit(p: Project, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditProject(p);
+    setEditForm({
+      name: p.name ?? "",
+      contractNumber: p.contractNumber ?? "",
+      client: p.client ?? "",
+      startDate: p.startDate ?? "",
+      endDate: p.endDate ?? "",
+      status: p.status ?? "active",
+    });
   }
 
   const active = projects.filter((p: any) => p.status === "active");
@@ -104,11 +144,24 @@ export default function DashboardPage() {
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base leading-tight">{p.name}</CardTitle>
                     <div className="flex items-center gap-1">
+                      {/* Edit button — admin only */}
+                      {user?.role === "admin" && (
+                        <button
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all"
+                          onClick={(e) => openEdit(p, e)}
+                          data-testid={`button-edit-project-${p.id}`}
+                          title="Edit project details"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {/* Delete button — admin only */}
                       {user?.role === "admin" && (
                         <button
                           className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
                           onClick={(e) => { e.stopPropagation(); setConfirmDelete(p.id); }}
                           data-testid={`button-delete-project-${p.id}`}
+                          title="Delete project"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -147,7 +200,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* New Project Dialog */}
+      {/* ── New Project Dialog ── */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent>
           <DialogHeader>
@@ -155,17 +208,30 @@ export default function DashboardPage() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4 mt-2">
             <div className="space-y-1.5">
-              <Label>Project Name *</Label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Newstead Property Development" required />
+              <Label>Project Name <span className="text-destructive">*</span></Label>
+              <Input
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Newstead Property Development"
+                required
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Contract Number</Label>
-                <Input value={form.contractNumber} onChange={e => setForm(f => ({ ...f, contractNumber: e.target.value }))} placeholder="HTG-BNE-001" />
+                <Input
+                  value={form.contractNumber}
+                  onChange={e => setForm(f => ({ ...f, contractNumber: e.target.value }))}
+                  placeholder="HTG-BNE-001"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Client</Label>
-                <Input value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} placeholder="Hutchinson Builders" />
+                <Input
+                  value={form.client}
+                  onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
+                  placeholder="Hutchinson Builders"
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -179,20 +245,107 @@ export default function DashboardPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
-              <Button type="submit" disabled={createProject.isPending}>Create Project</Button>
+              <Button type="button" variant="outline" onClick={() => { setShowNew(false); setForm(emptyForm); }}>Cancel</Button>
+              <Button type="submit" disabled={createProject.isPending}>
+                {createProject.isPending ? "Creating…" : "Create Project"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Delete Dialog */}
+      {/* ── Edit Project Dialog ── */}
+      <Dialog open={!!editProject} onOpenChange={open => { if (!open) setEditProject(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Project</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Project Name <span className="text-destructive">*</span></Label>
+              <Input
+                value={editForm.name}
+                onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                required
+                data-testid="edit-project-name"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Contract Number</Label>
+                <Input
+                  value={editForm.contractNumber}
+                  onChange={e => setEditForm(f => ({ ...f, contractNumber: e.target.value }))}
+                  placeholder="HTG-BNE-001"
+                  data-testid="edit-project-contract"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Client</Label>
+                <Input
+                  value={editForm.client}
+                  onChange={e => setEditForm(f => ({ ...f, client: e.target.value }))}
+                  placeholder="Hutchinson Builders"
+                  data-testid="edit-project-client"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Start Date</Label>
+                <Input
+                  type="date"
+                  value={editForm.startDate}
+                  onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))}
+                  data-testid="edit-project-start"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>End Date</Label>
+                <Input
+                  type="date"
+                  value={editForm.endDate}
+                  onChange={e => setEditForm(f => ({ ...f, endDate: e.target.value }))}
+                  data-testid="edit-project-end"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select
+                value={editForm.status}
+                onValueChange={val => setEditForm(f => ({ ...f, status: val }))}
+              >
+                <SelectTrigger data-testid="edit-project-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="on_hold">On Hold</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditProject(null)}>Cancel</Button>
+              <Button type="submit" disabled={updateProject.isPending || !editForm.name.trim()}>
+                {updateProject.isPending ? "Saving…" : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Confirm Delete Dialog ── */}
       <Dialog open={confirmDelete !== null} onOpenChange={() => setConfirmDelete(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Project?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">This will permanently delete the project and all its data — programme, materials, meetings, emails and RFIs. This cannot be undone.</p>
+          <p className="text-sm text-muted-foreground">
+            This will permanently delete the project and all its data — programme, materials, meetings, emails and RFIs. This cannot be undone.
+          </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
             <Button

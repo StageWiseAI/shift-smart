@@ -332,6 +332,53 @@ export function registerRoutes(app: Express) {
     res.json({ tasks: result, from: fromDate, weeks: parseInt(weeks), section: section || null });
   });
 
+  // ── Task date edit (single task, propagates shift downstream) ─────────────────
+  app.patch("/api/projects/:id/programmes/:progId/tasks/:uid", requireAuth, (req: any, res) => {
+    const { newStart, newFinish } = req.body;
+    if (!newStart) return res.status(400).json({ error: "newStart required" });
+    const prog = storage.getProgrammeById(parseInt(req.params.progId));
+    if (!prog) return res.status(404).json({ error: "Not found" });
+    const tasks: any[] = JSON.parse((prog as any).tasks_json);
+    const uid = req.params.uid;
+    const idx = tasks.findIndex(t => t.uid === uid);
+    if (idx === -1) return res.status(404).json({ error: "Task not found" });
+    const task = tasks[idx];
+    // Calculate shift in milliseconds
+    const oldStart = task.start ? new Date(task.start).getTime() : null;
+    const newStartMs = new Date(newStart).getTime();
+    const shiftMs = oldStart ? newStartMs - oldStart : 0;
+    // Recalculate finish if not provided — keep original duration
+    let resolvedFinish = newFinish;
+    if (!resolvedFinish && task.finish && oldStart) {
+      const origDurMs = new Date(task.finish).getTime() - oldStart;
+      resolvedFinish = new Date(newStartMs + origDurMs).toISOString().split("T")[0];
+    }
+    // Update the target task
+    tasks[idx] = { ...task, start: newStart, finish: resolvedFinish || task.finish };
+    // Propagate shift to all tasks that start on or after the original task's finish (downstream impact)
+    if (shiftMs !== 0 && task.finish) {
+      const taskFinishMs = new Date(task.finish).getTime();
+      for (let i = 0; i < tasks.length; i++) {
+        if (i === idx) continue;
+        const t = tasks[i];
+        if (!t.start) continue;
+        const ts = new Date(t.start).getTime();
+        if (ts >= taskFinishMs) {
+          const ns = new Date(ts + shiftMs).toISOString().split("T")[0];
+          let nf = t.finish;
+          if (t.finish) {
+            nf = new Date(new Date(t.finish).getTime() + shiftMs).toISOString().split("T")[0];
+          }
+          tasks[i] = { ...t, start: ns, finish: nf };
+        }
+      }
+    }
+    // Persist updated tasks_json
+    storage.updateProgrammeTasks(parseInt(req.params.progId), JSON.stringify(tasks));
+    audit(req, "update", "programme_task", parseInt(req.params.progId), `Task ${uid} date changed to ${newStart}`, parseInt(req.params.id));
+    res.json({ tasks });
+  });
+
   // ── EOT ──────────────────────────────────────────────────────────────────────
   app.get("/api/projects/:id/eot", requireAuth, (req: any, res) => {
     res.json(storage.getEotEvents(parseInt(req.params.id)));
@@ -655,6 +702,73 @@ export function registerRoutes(app: Express) {
   app.delete("/api/projects/:id/rfis/:rid", requireAuth, (req: any, res) => {
     (storage as any).deleteRfi(parseInt(req.params.rid));
     res.json({ ok: true });
+  });
+
+  // ── RFI document upload + AI extraction ───────────────────────────────────────
+  // Accepts raw text (paste/drop) and runs AI to extract RFI details, then creates record(s)
+  app.post("/api/projects/:id/rfis/extract", requireAuth, async (req: any, res) => {
+    const { rawText } = req.body;
+    if (!rawText || !rawText.trim()) return res.status(400).json({ error: "rawText required" });
+
+    const projectId = parseInt(req.params.id);
+
+    // Create a placeholder RFI record immediately so the UI can show "Analysing…"
+    const placeholder = (storage as any).createRfi({
+      projectId,
+      title: "Analysing RFI document…",
+      description: rawText.slice(0, 500),
+      raisedBy: null,
+      sourceType: "upload",
+      sourceId: null,
+      createdBy: req.user.id,
+    });
+
+    res.json({ rfiId: placeholder.id, status: "pending" });
+
+    // Run AI extraction in background
+    (async () => {
+      try {
+        const { analyseRfi } = await import("./ai");
+        const analysis = await analyseRfi(rawText);
+
+        // If multiple RFIs extracted, create additional records then update placeholder
+        if (analysis.rfis.length > 1) {
+          // First update placeholder with primary RFI
+          (storage as any).updateRfi(placeholder.id, {
+            title: analysis.rfis[0].title,
+            description: analysis.rfis[0].description,
+            raisedBy: analysis.rfis[0].raisedBy,
+            status: "open",
+          });
+          // Create remaining RFIs
+          for (let i = 1; i < analysis.rfis.length; i++) {
+            (storage as any).createRfi({
+              projectId,
+              title: analysis.rfis[i].title,
+              description: analysis.rfis[i].description,
+              raisedBy: analysis.rfis[i].raisedBy,
+              sourceType: "upload",
+              sourceId: placeholder.id,
+              createdBy: req.user.id,
+            });
+          }
+        } else {
+          // Single RFI — update placeholder with full details
+          (storage as any).updateRfi(placeholder.id, {
+            title: analysis.title,
+            description: analysis.description,
+            raisedBy: analysis.raisedBy,
+            status: "open",
+          });
+        }
+      } catch (err) {
+        console.error("RFI extraction failed:", err);
+        (storage as any).updateRfi(placeholder.id, {
+          title: "RFI extraction failed — check document",
+          status: "open",
+        });
+      }
+    })();
   });
 
   // ── Minutes AI analysis ───────────────────────────────────────────────────────

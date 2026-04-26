@@ -104,3 +104,51 @@ export async function transcribeAudio(audioBase64: string, mimeType: string): Pr
 
   return response.text;
 }
+
+// ── RFI document analysis ─────────────────────────────────────────────────────
+export async function analyseRfi(rawText: string): Promise<{
+  title: string;
+  description: string;
+  raisedBy: string | null;
+  receivedDate: string | null;
+  rfiNumber: string | null;
+  summary: string;
+  keyPoints: string[];
+  rfis: Array<{ title: string; description: string; raisedBy: string | null }>;
+}> {
+  const prompt = `You are a construction project assistant. Analyse the following RFI (Request for Information) document or text and return a JSON object with these fields:
+
+- title: a concise descriptive title for the RFI (e.g. "Structural connection detail — Level 12 beam")
+- description: full detailed description of what is being requested or queried
+- raisedBy: name or company raising the RFI if identifiable, otherwise null
+- receivedDate: date the RFI was raised if present (ISO format YYYY-MM-DD), otherwise null
+- rfiNumber: any RFI reference number present (e.g. "RFI-042"), otherwise null
+- summary: 2-3 sentence plain-English summary of what the RFI is about and why it matters
+- keyPoints: array of 3-6 concise bullet points covering the key questions, issues or information required
+- rfis: if the document contains multiple distinct RFIs, extract each as an object with title, description, raisedBy. If only one RFI, return an array with that single item.
+
+Return ONLY valid JSON. No markdown, no explanation.
+
+RFI DOCUMENT:
+${rawText}`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.2,
+    response_format: { type: "json_object" },
+  });
+
+  const content = response.choices[0].message.content ?? "{}";
+  const parsed = JSON.parse(content);
+  return {
+    title: parsed.title ?? "Untitled RFI",
+    description: parsed.description ?? "",
+    raisedBy: parsed.raisedBy ?? null,
+    receivedDate: parsed.receivedDate ?? null,
+    rfiNumber: parsed.rfiNumber ?? null,
+    summary: parsed.summary ?? "",
+    keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
+    rfis: Array.isArray(parsed.rfis) ? parsed.rfis : [],
+  };
+}

@@ -195,6 +195,7 @@ export interface IStorage {
   getProgrammes(projectId: number): Programme[];
   getProgrammeById(id: number): Programme | undefined;
   createProgramme(data: InsertProgramme): Programme;
+  updateProgrammeTasks(id: number, tasksJson: string): void;
 
   // EOT
   getEotEvents(projectId: number): EotEvent[];
@@ -329,6 +330,9 @@ class SqliteStorage implements IStorage {
       VALUES (?,?,?,?,?,?,?,?) RETURNING *`)
       .get(data.projectId, data.label, data.type ?? "baseline", data.xmlData, data.tasksJson,
         now(), data.uploadedBy, data.cycleDetectedDays ?? null) as Programme;
+  }
+  updateProgrammeTasks(id: number, tasksJson: string) {
+    sqlite.prepare("UPDATE programmes SET tasks_json=? WHERE id=?").run(tasksJson, id);
   }
 
   // ── EOT ──────────────────────────────────────────────────────────────────────
