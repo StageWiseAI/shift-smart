@@ -1,6 +1,11 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Lazy client — reads env var at call time so Railway env is always current
+function getOpenAI(): OpenAI {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("OPENAI_API_KEY environment variable is not set on this server.");
+  return new OpenAI({ apiKey: key });
+}
 
 // ── Email analysis ────────────────────────────────────────────────────────────
 export async function analyseEmail(rawText: string): Promise<{
@@ -27,7 +32,7 @@ Return ONLY valid JSON. No markdown, no explanation.
 EMAIL:
 ${rawText}`;
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
     messages: [{ role: "user", content: prompt }],
     temperature: 0.2,
@@ -70,7 +75,7 @@ Return ONLY valid JSON. No markdown, no explanation.
 MEETING MINUTES:
 ${minutesText}`;
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
     messages: [{ role: "user", content: prompt }],
     temperature: 0.2,
@@ -96,7 +101,7 @@ export async function transcribeAudio(audioBase64: string, mimeType: string): Pr
   const blob = new Blob([buffer], { type: mimeType });
   const file = new File([blob], "recording.webm", { type: mimeType });
 
-  const response = await openai.audio.transcriptions.create({
+  const response = await getOpenAI().audio.transcriptions.create({
     model: "whisper-1",
     file,
     language: "en",
@@ -132,7 +137,7 @@ Return ONLY valid JSON. No markdown, no explanation.
 RFI DOCUMENT:
 ${rawText}`;
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
     messages: [{ role: "user", content: prompt }],
     temperature: 0.2,

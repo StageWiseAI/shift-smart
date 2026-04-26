@@ -93,6 +93,7 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
+  console.log(`[startup] OPENAI_API_KEY present: ${!!process.env.OPENAI_API_KEY} (length: ${process.env.OPENAI_API_KEY?.length ?? 0})`);
   httpServer.listen(
     {
       port,
