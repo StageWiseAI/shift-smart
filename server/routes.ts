@@ -144,12 +144,37 @@ function applyNewCycle(tasks: any[], originalCycleDays: number, newCycleDays: nu
 function getLookahead(tasks: any[], fromDate: string, weeks: number, section?: string): any[] {
   const from = new Date(fromDate).getTime();
   const to = from + weeks * 7 * 24 * 60 * 60 * 1000;
-  return tasks.filter(t => {
+
+  // Build an ancestor-name map: for each task index, collect all ancestor summary names
+  // This lets us match "Facade" against child tasks under a "Facade + Internal Finishes" summary
+  const ancestorNames: string[][] = tasks.map(() => []);
+  // Track the nearest summary task at each outline level
+  const levelStack: Record<number, string> = {};
+  tasks.forEach((t, i) => {
+    const level = t.outlineLevel ?? t.wbsLevel ?? 1;
+    // Clear any deeper levels from the stack when we step back up
+    Object.keys(levelStack).forEach(k => {
+      if (parseInt(k) >= level) delete levelStack[parseInt(k)];
+    });
+    // Collect ancestor names from the stack
+    ancestorNames[i] = Object.values(levelStack);
+    // If this task is a summary, push its name onto the stack for children
+    if (t.isSummary || (t.outlineLevel != null && t.outlineLevel < (tasks[i + 1]?.outlineLevel ?? level))) {
+      levelStack[level] = t.name ?? "";
+    }
+  });
+
+  const sectionLower = section?.toLowerCase();
+
+  return tasks.filter((t, i) => {
     if (!t.start) return false;
     const s = new Date(t.start).getTime();
     if (s < from || s > to) return false;
-    if (section) {
-      return t.name?.toLowerCase().includes(section.toLowerCase());
+    if (sectionLower) {
+      // Match if the task's own name OR any ancestor summary name contains the search term
+      const ownMatch = t.name?.toLowerCase().includes(sectionLower);
+      const ancestorMatch = ancestorNames[i].some(a => a.toLowerCase().includes(sectionLower));
+      return ownMatch || ancestorMatch;
     }
     return true;
   });
