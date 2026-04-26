@@ -1,11 +1,5 @@
-[phases.setup]
-nixPkgs = ["nodejs_20"]
-
-[phases.install]
-cmds = ["npm ci --omit=dev"]
-
 [phases.build]
-cmds = ["echo 'Using pre-built dist'"]
+cmds = ["npm install", "npm run build"]
 
 [start]
 cmd = "NODE_ENV=production node dist/index.cjs"
