@@ -827,36 +827,40 @@ export function registerRoutes(app: Express) {
     if (!meeting) return res.status(404).json({ error: "Not found" });
 
     const { audioBase64, mimeType } = req.body;
-    // SQLite SELECT * returns snake_case — use minutes_text
-    let minutesText = (meeting as any).minutes_text ?? "";
+    // SQLite SELECT * returns snake_case
+    const existingMinutes = (meeting as any).minutes_text ?? "";
+    let transcriptText = (meeting as any).transcript_text ?? "";
 
-    // If audio is supplied, transcribe first then combine
+    // If audio is supplied, transcribe and store separately from typed notes
     if (audioBase64) {
       try {
         const { transcribeAudio } = await import("./ai");
         const transcript = await transcribeAudio(audioBase64, mimeType ?? "audio/webm");
-        minutesText = minutesText ? `${minutesText}\n\n[Transcript]\n${transcript}` : `[Transcript]\n${transcript}`;
-        // updateMeeting expects camelCase (InsertMeeting type)
-        storage.updateMeeting(meeting.id, { minutesText });
+        // Append to any existing transcript (e.g. multiple recordings)
+        transcriptText = transcriptText ? `${transcriptText}\n\n${transcript}` : transcript;
+        // Save transcript separately — does not touch minutes_text
+        storage.updateMeeting(meeting.id, { transcriptText } as any);
       } catch (err: any) {
         console.error("Whisper transcription failed:", err);
         return res.status(500).json({ error: `Transcription failed: ${err?.message ?? err}` });
       }
     }
 
-    if (!minutesText.trim()) {
+    // Combine both for AI analysis — AI sees everything, display keeps them separate
+    const combinedText = [existingMinutes, transcriptText].filter(Boolean).join("\n\n");
+
+    if (!combinedText.trim()) {
       return res.status(400).json({ error: "No meeting notes or recording found to analyse. Add some notes or record the meeting first." });
     }
 
     try {
       const { analyseMinutes } = await import("./ai");
-      const analysis = await analyseMinutes(minutesText);
+      const analysis = await analyseMinutes(combinedText);
 
-      // Store actions back on the meeting (actionsJson is camelCase for updateMeeting)
+      // Store actions — keep minutes_text and transcript_text separate
       storage.updateMeeting(meeting.id, {
         actionsJson: JSON.stringify(analysis.actions),
-        minutesText,
-      });
+      } as any);
 
       // Auto-create RFIs from minutes if detected
       if (analysis.hasRfi && analysis.rfis.length > 0) {
@@ -880,7 +884,7 @@ export function registerRoutes(app: Express) {
         attendeesSuggested: analysis.attendeesSuggested,
         hasRfi: analysis.hasRfi,
         rfisCreated: analysis.rfis.length,
-        minutesText,
+        transcriptText,
       });
     } catch (err) {
       console.error("Minutes analysis failed:", err);

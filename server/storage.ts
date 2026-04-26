@@ -469,7 +469,7 @@ class SqliteStorage implements IStorage {
     const m = this.getMeetingById(id) as any;
     if (!m) return undefined;
     // SQLite SELECT * returns snake_case — use snake_case field names as fallbacks
-    sqlite.prepare(`UPDATE meetings SET meeting_date=?,meeting_time=?,title=?,type=?,attendees_json=?,agenda_json=?,minutes_text=?,audio_data=?,audio_mime=?,actions_json=?,status=? WHERE id=?`)
+    sqlite.prepare(`UPDATE meetings SET meeting_date=?,meeting_time=?,title=?,type=?,attendees_json=?,agenda_json=?,minutes_text=?,transcript_text=?,audio_data=?,audio_mime=?,actions_json=?,status=? WHERE id=?`)
       .run(
         data.meetingDate ?? m.meeting_date,
         data.meetingTime ?? m.meeting_time,
@@ -478,6 +478,7 @@ class SqliteStorage implements IStorage {
         data.attendeesJson ?? m.attendees_json,
         data.agendaJson ?? m.agenda_json,
         data.minutesText ?? m.minutes_text,
+        (data as any).transcriptText ?? m.transcript_text ?? null,
         (data as any).audioData ?? m.audio_data,
         (data as any).audioMime ?? m.audio_mime,
         data.actionsJson ?? m.actions_json,
@@ -540,6 +541,7 @@ sqlite.exec(`
 
 // ── Migrations: add photo_type column if not yet present ───────────────────
 try { sqlite.exec("ALTER TABLE prestart_photos ADD COLUMN photo_type TEXT"); } catch { /* column already exists */ }
+try { sqlite.exec("ALTER TABLE meetings ADD COLUMN transcript_text TEXT"); } catch { /* column already exists */ }
 
 // ── Email storage methods (added to SqliteStorage instance via prototype extension) ──
 const proto = SqliteStorage.prototype as any;

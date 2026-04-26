@@ -506,16 +506,42 @@ export default function MeetingsPage() {
 
           {/* Notes / Minutes text */}
           <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold">Meeting Notes</h2>
+            <h2 className="text-sm font-semibold mb-3">Meeting Notes</h2>
+            <div className="space-y-4">
+
+              {/* Typed / uploaded notes — always editable */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Typed / Uploaded Notes</p>
+                <Textarea
+                  defaultValue={m.minutes_text ?? ""}
+                  onBlur={e => updateField("minutesText", e.target.value)}
+                  placeholder={"Type or paste meeting notes here…\n\nYou can also upload a text file above — AI will extract action items automatically."}
+                  rows={6}
+                  key={`notes-${m.id}`}
+                />
+              </div>
+
+              {/* Recording transcript — read-only, only shown if present */}
+              {m.transcript_text && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recording Transcript</p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[10px] text-muted-foreground hover:text-destructive px-2"
+                      onClick={() => { if (confirm("Clear the recording transcript?")) updateField("transcriptText", null); }}
+                    >
+                      <X className="h-3 w-3 mr-1" /> Clear
+                    </Button>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm text-muted-foreground whitespace-pre-wrap font-mono text-xs leading-relaxed max-h-48 overflow-y-auto">
+                    {m.transcript_text}
+                  </div>
+                </div>
+              )}
+
             </div>
-            <Textarea
-              defaultValue={m.minutes_text ?? ""}
-              onBlur={e => updateField("minutesText", e.target.value)}
-              placeholder={"Type or paste meeting notes here…\n\nYou can also record live or upload a file above — AI will extract action items automatically."}
-              rows={8}
-              key={m.id}
-            />
           </section>
 
           <Separator />
