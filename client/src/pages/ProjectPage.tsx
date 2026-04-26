@@ -5,17 +5,21 @@ import Layout from "./Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   CalendarDays, Truck, HardHat, ClipboardList, FileQuestion,
-  Mail, Building2, Hash, ArrowRight, AlertCircle, CheckCircle2,
-  Clock, CircleDashed, ChevronRight, Package
+  Building2, Hash, CheckCircle2, Clock, CircleDashed,
+  ChevronRight, Package, AlertTriangle, Eye
 } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(date: string | null | undefined) {
   if (!date) return null;
   return new Date(date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function fmtShort(date: string | null | undefined) {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
 }
 
 function daysUntil(date: string) {
@@ -27,21 +31,11 @@ function daysUntil(date: string) {
 }
 
 function DueBadge({ days }: { days: number }) {
-  if (days < 0) return <Badge className="text-[10px] h-5 bg-red-500/10 text-red-600 border-red-400/30">Overdue {Math.abs(days)}d</Badge>;
-  if (days === 0) return <Badge className="text-[10px] h-5 bg-amber-500/10 text-amber-600 border-amber-400/30">Today</Badge>;
-  if (days <= 3) return <Badge className="text-[10px] h-5 bg-amber-500/10 text-amber-600 border-amber-400/30">In {days}d</Badge>;
-  return <Badge variant="outline" className="text-[10px] h-5">{fmt(new Date(Date.now() + days * 86400000).toISOString())}</Badge>;
+  if (days < 0) return <Badge className="text-[10px] h-5 shrink-0 bg-red-500/10 text-red-600 border-red-400/30">Overdue {Math.abs(days)}d</Badge>;
+  if (days === 0) return <Badge className="text-[10px] h-5 shrink-0 bg-amber-500/10 text-amber-600 border-amber-400/30">Today</Badge>;
+  if (days <= 3) return <Badge className="text-[10px] h-5 shrink-0 bg-amber-500/10 text-amber-600 border-amber-400/30">In {days}d</Badge>;
+  return <Badge variant="outline" className="text-[10px] h-5 shrink-0">{fmt(new Date(Date.now() + days * 86400000).toISOString())}</Badge>;
 }
-
-// ── Module nav tiles ──────────────────────────────────────────────────────────
-const MODULE_TILES = [
-  { href: "programme",  icon: CalendarDays, label: "Programme",           color: "bg-blue-500/10 text-blue-600" },
-  { href: "materials",  icon: Truck,        label: "Material Handling",    color: "bg-amber-500/10 text-amber-600" },
-  { href: "prestart",   icon: HardHat,      label: "Pre-Start Meetings",   color: "bg-orange-500/10 text-orange-600" },
-  { href: "meetings",   icon: ClipboardList,label: "Meetings & Minutes",   color: "bg-green-500/10 text-green-600" },
-  { href: "rfis",       icon: FileQuestion, label: "RFIs",                 color: "bg-violet-500/10 text-violet-600" },
-  { href: "emails",     icon: Mail,         label: "Emails",               color: "bg-sky-500/10 text-sky-600" },
-];
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -73,10 +67,47 @@ export default function ProjectPage() {
     queryFn: () => apiRequest("GET", `/api/projects/${pid}/meetings`).then(r => r.json()),
   });
 
+  // Programme — get latest programme, then its tasks
+  const { data: programmes = [] } = useQuery<any[]>({
+    queryKey: [`/api/projects/${pid}/programmes`],
+    queryFn: () => apiRequest("GET", `/api/projects/${pid}/programmes`).then(r => r.json()),
+  });
+
+  const latestProg = programmes[0] ?? null;
+
+  const { data: taskData } = useQuery<{ tasks: any[]; cycleDetectedDays: number | null }>({
+    queryKey: [`/api/projects/${pid}/programmes/${latestProg?.id}/tasks`],
+    queryFn: () => apiRequest("GET", `/api/projects/${pid}/programmes/${latestProg.id}/tasks`).then(r => r.json()),
+    enabled: !!latestProg?.id,
+  });
+
+  const allTasks = taskData?.tasks ?? [];
+
   // ── Derived data ──────────────────────────────────────────────────────────
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const in7 = new Date(today.getTime() + 7 * 86400000);
+  const in30 = new Date(today.getTime() + 30 * 86400000);
+
+  // Programme health — Critical tasks (not complete, upcoming in next 30 days)
+  const criticalTasks = allTasks
+    .filter(t => t.isCritical && !t.isSummary && t.finish && (t.percentComplete ?? 0) < 100)
+    .filter(t => {
+      const f = new Date(t.finish);
+      return f >= today && f <= in30;
+    })
+    .sort((a, b) => a.finish.localeCompare(b.finish))
+    .slice(0, 6);
+
+  // Monitor tasks — non-critical, non-summary, upcoming finish in next 14 days, <100% complete
+  const monitorTasks = allTasks
+    .filter(t => !t.isCritical && !t.isSummary && !t.isMilestone && t.finish && (t.percentComplete ?? 0) < 100)
+    .filter(t => {
+      const f = new Date(t.finish);
+      return f >= today && f <= new Date(today.getTime() + 14 * 86400000);
+    })
+    .sort((a, b) => a.finish.localeCompare(b.finish))
+    .slice(0, 5);
 
   // Open + in-review RFIs
   const openRfis = rfis.filter(r => r.status === "open" || r.status === "in_review");
@@ -90,10 +121,9 @@ export default function ProjectPage() {
     })
     .sort((a, b) => a.delivery_date.localeCompare(b.delivery_date));
 
-  // Today's + upcoming pre-start meetings (draft)
+  // Upcoming pre-start meetings
   const upcomingPrestarts = prestarts
-    .filter(p => p.status === "draft" && p.meeting_date)
-    .filter(p => new Date(p.meeting_date) >= today)
+    .filter(p => p.meeting_date && new Date(p.meeting_date) >= today)
     .sort((a, b) => a.meeting_date.localeCompare(b.meeting_date))
     .slice(0, 5);
 
@@ -116,9 +146,11 @@ export default function ProjectPage() {
   if (loadingProject) return <Layout><div className="p-8 text-muted-foreground text-sm">Loading…</div></Layout>;
   if (!project) return <Layout><div className="p-8 text-muted-foreground text-sm">Project not found.</div></Layout>;
 
+  const hasProgramme = !!latestProg;
+
   return (
     <Layout projectId={pid} projectName={project.name}>
-      <div className="px-6 py-6 space-y-6 max-w-5xl">
+      <div className="px-6 py-6 space-y-5 max-w-5xl">
 
         {/* Project header */}
         <div>
@@ -140,50 +172,150 @@ export default function ProjectPage() {
           </div>
         </div>
 
-        {/* ── Live summary grid ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-          {/* Open RFIs */}
+        {/* ── Programme Health (Critical + Monitor) — full width ── */}
+        {hasProgramme && (
           <Card className="border-border/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <FileQuestion className="h-4 w-4 text-violet-500" />
-                  Open RFIs
+                  <CalendarDays className="h-4 w-4 text-blue-500" />
+                  Programme Health
+                  {latestProg?.label && (
+                    <span className="text-[10px] text-muted-foreground font-normal">— {latestProg.label}</span>
+                  )}
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs text-muted-foreground gap-1"
-                  onClick={() => navigate(`/projects/${pid}/rfis`)}
+                  onClick={() => navigate(`/projects/${pid}/programme`)}
+                >
+                  Open programme <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {criticalTasks.length === 0 && monitorTasks.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-2 flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> No critical or monitor items due in the next 30 days
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
+                  {/* Critical */}
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-red-600 mb-2 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3 w-3" /> Critical — next 30 days
+                    </p>
+                    {criticalTasks.length === 0 ? (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> No critical tasks due
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {criticalTasks.map(t => (
+                          <li
+                            key={t.uid}
+                            className="flex items-start justify-between gap-2 cursor-pointer"
+                            onClick={() => navigate(`/projects/${pid}/programme`)}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-foreground/80 truncate leading-snug">{t.name}</p>
+                              {t.percentComplete != null && t.percentComplete > 0 && (
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <div className="w-12 h-1 rounded-full bg-muted overflow-hidden">
+                                    <div className="h-full bg-red-500 rounded-full" style={{ width: `${t.percentComplete}%` }} />
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground">{t.percentComplete}%</span>
+                                </div>
+                              )}
+                            </div>
+                            <Badge className="text-[10px] h-5 shrink-0 bg-red-500/10 text-red-600 border-red-400/30 whitespace-nowrap">
+                              {fmtShort(t.finish)}
+                            </Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Monitor */}
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-600 mb-2 flex items-center gap-1.5">
+                      <Eye className="h-3 w-3" /> Monitor — next 14 days
+                    </p>
+                    {monitorTasks.length === 0 ? (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> No tasks to monitor
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {monitorTasks.map(t => (
+                          <li
+                            key={t.uid}
+                            className="flex items-start justify-between gap-2 cursor-pointer"
+                            onClick={() => navigate(`/projects/${pid}/programme`)}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-foreground/80 truncate leading-snug">{t.name}</p>
+                              {t.percentComplete != null && t.percentComplete > 0 && (
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <div className="w-12 h-1 rounded-full bg-muted overflow-hidden">
+                                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${t.percentComplete}%` }} />
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground">{t.percentComplete}%</span>
+                                </div>
+                              )}
+                            </div>
+                            <Badge className="text-[10px] h-5 shrink-0 bg-amber-500/10 text-amber-600 border-amber-400/30 whitespace-nowrap">
+                              {fmtShort(t.finish)}
+                            </Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── 2-col grid: Pre-starts + Deliveries ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Upcoming pre-starts — FIRST */}
+          <Card className="border-border/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <HardHat className="h-4 w-4 text-orange-500" />
+                  Upcoming Pre-Starts
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground gap-1"
+                  onClick={() => navigate(`/projects/${pid}/prestart`)}
                 >
                   View all <ChevronRight className="h-3.5 w-3.5" />
                 </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              {openRfis.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-2 flex items-center gap-1.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> No open RFIs
-                </p>
+              {upcomingPrestarts.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-2">No upcoming pre-start meetings</p>
               ) : (
                 <ul className="space-y-2">
-                  {openRfis.slice(0, 5).map(r => (
+                  {upcomingPrestarts.map(p => (
                     <li
-                      key={r.id}
-                      className="flex items-start justify-between gap-2 cursor-pointer hover:text-foreground"
-                      onClick={() => navigate(`/projects/${pid}/rfis`)}
+                      key={p.id}
+                      className="flex items-start justify-between gap-2 cursor-pointer"
+                      onClick={() => navigate(`/projects/${pid}/prestart`)}
                     >
-                      <span className="text-xs text-foreground/80 leading-snug flex-1 min-w-0 truncate">{r.title}</span>
-                      {r.status === "in_review"
-                        ? <Badge className="text-[10px] h-5 shrink-0 bg-amber-500/10 text-amber-600 border-amber-400/30 gap-1"><Clock className="h-3 w-3" />In Review</Badge>
-                        : <Badge className="text-[10px] h-5 shrink-0 bg-blue-500/10 text-blue-600 border-blue-400/30 gap-1"><CircleDashed className="h-3 w-3" />Open</Badge>
-                      }
+                      <p className="text-xs text-foreground/80 flex-1 min-w-0 truncate">{p.title}</p>
+                      <DueBadge days={daysUntil(p.meeting_date)} />
                     </li>
                   ))}
-                  {openRfis.length > 5 && (
-                    <li className="text-xs text-muted-foreground">+{openRfis.length - 5} more</li>
-                  )}
                 </ul>
               )}
             </CardContent>
@@ -225,44 +357,6 @@ export default function ProjectPage() {
                         {d.supplier && <p className="text-[10px] text-muted-foreground truncate">{d.supplier}</p>}
                       </div>
                       <DueBadge days={daysUntil(d.delivery_date)} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Upcoming pre-starts */}
-          <Card className="border-border/60">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <HardHat className="h-4 w-4 text-orange-500" />
-                  Upcoming Pre-Starts
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-muted-foreground gap-1"
-                  onClick={() => navigate(`/projects/${pid}/prestart`)}
-                >
-                  View all <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {upcomingPrestarts.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-2">No upcoming pre-start meetings</p>
-              ) : (
-                <ul className="space-y-2">
-                  {upcomingPrestarts.map(p => (
-                    <li
-                      key={p.id}
-                      className="flex items-start justify-between gap-2 cursor-pointer"
-                      onClick={() => navigate(`/projects/${pid}/prestart`)}
-                    >
-                      <p className="text-xs text-foreground/80 flex-1 min-w-0 truncate">{p.title}</p>
-                      <DueBadge days={daysUntil(p.meeting_date)} />
                     </li>
                   ))}
                 </ul>
@@ -315,29 +409,54 @@ export default function ProjectPage() {
               )}
             </CardContent>
           </Card>
-        </div>
 
-        {/* ── Module nav tiles ── */}
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Modules</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {MODULE_TILES.map(m => (
-              <button
-                key={m.href}
-                className="flex items-center gap-3 p-3 rounded-lg border border-border/60 bg-card hover:border-primary/30 hover:shadow-sm transition-all text-left group"
-                onClick={() => navigate(`/projects/${pid}/${m.href}`)}
-                data-testid={`tile-module-${m.href}`}
-              >
-                <div className={`p-1.5 rounded-md shrink-0 ${m.color}`}>
-                  <m.icon className="h-4 w-4" />
-                </div>
-                <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground leading-tight">{m.label}</span>
-                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 ml-auto shrink-0 group-hover:text-muted-foreground transition-colors" />
-              </button>
-            ))}
-          </div>
-        </div>
+          {/* Open RFIs — LAST */}
+          <Card className="border-border/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <FileQuestion className="h-4 w-4 text-violet-500" />
+                  Open RFIs
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground gap-1"
+                  onClick={() => navigate(`/projects/${pid}/rfis`)}
+                >
+                  View all <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {openRfis.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-2 flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> No open RFIs
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {openRfis.slice(0, 5).map(r => (
+                    <li
+                      key={r.id}
+                      className="flex items-start justify-between gap-2 cursor-pointer"
+                      onClick={() => navigate(`/projects/${pid}/rfis`)}
+                    >
+                      <span className="text-xs text-foreground/80 leading-snug flex-1 min-w-0 truncate">{r.title}</span>
+                      {r.status === "in_review"
+                        ? <Badge className="text-[10px] h-5 shrink-0 bg-amber-500/10 text-amber-600 border-amber-400/30 gap-1"><Clock className="h-3 w-3" />In Review</Badge>
+                        : <Badge className="text-[10px] h-5 shrink-0 bg-blue-500/10 text-blue-600 border-blue-400/30 gap-1"><CircleDashed className="h-3 w-3" />Open</Badge>
+                      }
+                    </li>
+                  ))}
+                  {openRfis.length > 5 && (
+                    <li className="text-xs text-muted-foreground">+{openRfis.length - 5} more</li>
+                  )}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
 
+        </div>
       </div>
     </Layout>
   );
