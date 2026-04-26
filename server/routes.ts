@@ -456,6 +456,25 @@ export function registerRoutes(app: Express) {
     res.json({ ok: true });
   });
 
+  // ── Task overrides (site manager progress updates) ────────────────────────
+  app.get("/api/projects/:id/programmes/:progId/task-overrides", requireAuth, (req: any, res) => {
+    const overrides = (storage as any).getTaskOverrides(parseInt(req.params.progId));
+    res.json(overrides);
+  });
+
+  app.post("/api/projects/:id/programmes/:progId/task-overrides", requireAuth, (req: any, res) => {
+    const { taskUid, progress, complete } = req.body;
+    if (!taskUid) return res.status(400).json({ error: "taskUid required" });
+    (storage as any).upsertTaskOverride(
+      parseInt(req.params.progId),
+      taskUid,
+      progress != null ? parseFloat(progress) : null,
+      !!complete,
+      req.user?.id ?? null
+    );
+    res.json({ ok: true });
+  });
+
   // ── Cycle override ────────────────────────────────────────────────────────────
   app.post("/api/projects/:id/programmes/:progId/cycle", requireAuth, (req: any, res) => {
     const { newCycleDays } = req.body;

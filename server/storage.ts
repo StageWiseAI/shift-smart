@@ -543,8 +543,35 @@ sqlite.exec(`
 try { sqlite.exec("ALTER TABLE prestart_photos ADD COLUMN photo_type TEXT"); } catch { /* column already exists */ }
 try { sqlite.exec("ALTER TABLE meetings ADD COLUMN transcript_text TEXT"); } catch { /* column already exists */ }
 
+// task_overrides — stores site manager progress/completion updates per task per programme
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS task_overrides (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    programme_id INTEGER NOT NULL,
+    task_uid TEXT NOT NULL,
+    progress REAL,
+    complete INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    updated_by INTEGER,
+    UNIQUE(programme_id, task_uid)
+  );
+`);
+
 // ── Email storage methods (added to SqliteStorage instance via prototype extension) ──
 const proto = SqliteStorage.prototype as any;
+
+proto.getTaskOverrides = function(programmeId: number) {
+  return sqlite.prepare("SELECT * FROM task_overrides WHERE programme_id=?").all(programmeId);
+};
+proto.upsertTaskOverride = function(programmeId: number, taskUid: string, progress: number | null, complete: boolean, userId: number | null) {
+  sqlite.prepare(`
+    INSERT INTO task_overrides (programme_id, task_uid, progress, complete, updated_at, updated_by)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(programme_id, task_uid) DO UPDATE SET
+      progress=excluded.progress, complete=excluded.complete,
+      updated_at=excluded.updated_at, updated_by=excluded.updated_by
+  `).run(programmeId, taskUid, progress, complete ? 1 : 0, new Date().toISOString(), userId);
+};
 
 proto.getEmails = function(projectId: number) {
   return sqlite.prepare("SELECT * FROM emails WHERE project_id=? ORDER BY created_at DESC").all(projectId);

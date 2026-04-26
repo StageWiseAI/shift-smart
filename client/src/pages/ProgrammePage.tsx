@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import Layout from "./Layout";
@@ -16,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Upload, CloudRain, RefreshCw, Eye, AlertTriangle, CheckCircle2,
   Loader2, Printer, Calendar, ChevronRight, ArrowRight, TrendingDown, TrendingUp,
-  Search, X, Pencil, Trash2
+  Search, X, Pencil, Trash2, SlidersHorizontal
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -61,44 +61,131 @@ function addDays(date: Date, days: number) {
 }
 
 // ── Plain task table row ─────────────────────────────────────────────────────
-function TaskRow({ task, depth, onEdit }: { task: Task; depth: number; onEdit?: (t: Task) => void }) {
+function TaskRow({ task, depth, onEdit, override, onSaveOverride }: {
+  task: Task;
+  depth: number;
+  onEdit?: (t: Task) => void;
+  override?: { progress: number | null; complete: boolean };
+  onSaveOverride?: (uid: string, progress: number, complete: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const effectiveProgress = override?.complete ? 100 : (override?.progress ?? task.percentComplete ?? 0);
+  const isComplete = override?.complete ?? false;
+
   return (
-    <tr className={cn(
-      "border-b border-border/40 hover:bg-muted/20 transition-colors group",
-      task.isSummary && "bg-muted/30 font-medium",
-      task.isMilestone && "bg-amber-50/60 dark:bg-amber-950/20",
-    )}>
-      <td className="py-1.5 px-3 text-sm" style={{ paddingLeft: `${12 + (depth) * 16}px` }}>
-        <div className="flex items-center gap-1.5">
-          {task.isMilestone && <div className="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0" />}
-          {task.isSummary && !task.isMilestone && <div className="w-2 h-2 rounded-sm bg-primary flex-shrink-0" />}
-          <span className="leading-tight">{task.name}</span>
-          {task.isCritical && <Badge className="text-[9px] px-1 py-0 h-3.5 bg-red-500/15 text-red-600 border-red-300 ml-1">Critical</Badge>}
+    <>
+      <tr className={cn(
+        "border-b border-border/40 hover:bg-muted/20 transition-colors group",
+        task.isSummary && "bg-muted/30 font-medium",
+        task.isMilestone && "bg-amber-50/60 dark:bg-amber-950/20",
+        isComplete && "opacity-60",
+      )}>
+        <td className="py-1.5 px-3 text-sm" style={{ paddingLeft: `${12 + depth * 16}px` }}>
+          <div className="flex items-center gap-1.5">
+            {task.isMilestone && <div className="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0" />}
+            {task.isSummary && !task.isMilestone && <div className="w-2 h-2 rounded-sm bg-primary flex-shrink-0" />}
+            <span className={cn("leading-tight", isComplete && "line-through text-muted-foreground")}>{task.name}</span>
+            {task.isCritical && <Badge className="text-[9px] px-1 py-0 h-3.5 bg-red-500/15 text-red-600 border-red-300 ml-1">Critical</Badge>}
+            {isComplete && <Badge className="text-[9px] px-1 py-0 h-3.5 bg-green-500/15 text-green-700 border-green-300 ml-1">Complete</Badge>}
+          </div>
+        </td>
+        <td className="py-1.5 px-3 text-sm text-muted-foreground whitespace-nowrap">{fmtDate(task.start)}</td>
+        <td className="py-1.5 px-3 text-sm text-muted-foreground whitespace-nowrap">{fmtDate(task.finish)}</td>
+        <td className="py-1.5 px-3 text-sm text-muted-foreground">
+          {effectiveProgress > 0
+            ? <div className="flex items-center gap-1.5">
+                <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className={cn("h-full rounded-full", isComplete ? "bg-green-500" : "bg-primary")} style={{ width: `${effectiveProgress}%` }} />
+                </div>
+                <span className="text-xs">{effectiveProgress}%</span>
+                {override && <span className="text-[9px] text-primary font-medium ml-0.5">• updated</span>}
+              </div>
+            : null}
+        </td>
+        <td className="py-1.5 px-3">
+          {task.isMilestone && <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-300">Milestone</Badge>}
+          {task.isSummary && !task.isMilestone && <Badge variant="outline" className="text-[10px] h-4">Summary</Badge>}
+        </td>
+        <td className="py-1.5 px-2 w-16">
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+            {onSaveOverride && !task.isSummary && !task.isMilestone && (
+              <button
+                className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all"
+                onClick={() => setOpen(o => !o)}
+                title="Update progress"
+              >
+                <SlidersHorizontal className="h-3 w-3" />
+              </button>
+            )}
+            {onEdit && (
+              <button
+                className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all"
+                onClick={() => onEdit(task)}
+                title="Edit dates"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+      {open && onSaveOverride && (
+        <tr className="border-b border-border/40 bg-muted/40">
+          <td colSpan={6} className="px-4 py-3">
+            <ProgressPanel
+              task={task}
+              current={effectiveProgress}
+              isComplete={isComplete}
+              onSave={(pct, done) => { onSaveOverride(task.uid, pct, done); setOpen(false); }}
+              onCancel={() => setOpen(false)}
+            />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// ── Inline progress panel ────────────────────────────────────────────────────
+function ProgressPanel({ task, current, isComplete, onSave, onCancel }: {
+  task: Task;
+  current: number;
+  isComplete: boolean;
+  onSave: (pct: number, done: boolean) => void;
+  onCancel: () => void;
+}) {
+  const [pct, setPct] = useState(isComplete ? 100 : current);
+  const [done, setDone] = useState(isComplete);
+
+  return (
+    <div className="flex flex-col gap-3 max-w-sm">
+      <p className="text-xs font-medium text-foreground truncate">{task.name}</p>
+      <div className="flex items-center gap-3">
+        <input
+          type="range" min={0} max={100} step={5}
+          value={done ? 100 : pct}
+          disabled={done}
+          onChange={e => { setPct(parseInt(e.target.value)); setDone(false); }}
+          className="flex-1 accent-primary"
+        />
+        <span className="text-sm font-semibold w-10 text-right">{done ? 100 : pct}%</span>
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={done}
+            onChange={e => { setDone(e.target.checked); if (e.target.checked) setPct(100); }}
+            className="accent-green-600"
+          />
+          <span>Mark as Complete</span>
+        </label>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button size="sm" onClick={() => onSave(done ? 100 : pct, done)}>Save</Button>
         </div>
-      </td>
-      <td className="py-1.5 px-3 text-sm text-muted-foreground whitespace-nowrap">{fmtDate(task.start)}</td>
-      <td className="py-1.5 px-3 text-sm text-muted-foreground whitespace-nowrap">{fmtDate(task.finish)}</td>
-      <td className="py-1.5 px-3 text-sm text-muted-foreground">
-        {task.percentComplete != null && task.percentComplete > 0
-          ? <div className="flex items-center gap-1.5"><div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${task.percentComplete}%` }} /></div><span className="text-xs">{task.percentComplete}%</span></div>
-          : null}
-      </td>
-      <td className="py-1.5 px-3">
-        {task.isMilestone && <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-300">Milestone</Badge>}
-        {task.isSummary && !task.isMilestone && <Badge variant="outline" className="text-[10px] h-4">Summary</Badge>}
-      </td>
-      <td className="py-1.5 px-2 w-8">
-        {onEdit && (
-          <button
-            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all"
-            onClick={() => onEdit(task)}
-            title="Edit dates"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-        )}
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
@@ -546,6 +633,29 @@ export default function ProgrammePage() {
 
   const eotEvents = useQuery<any[]>({ queryKey: [`/api/projects/${pid}/eot`] });
 
+  // Task overrides (site manager progress/completion updates)
+  const { data: overridesData } = useQuery<any[]>({
+    queryKey: [`/api/projects/${pid}/programmes/${activeProg}/task-overrides`],
+    enabled: !!activeProg,
+    staleTime: STALE,
+  });
+  const overridesMap = (overridesData ?? []).reduce((acc: Record<string, any>, o: any) => {
+    acc[o.task_uid] = { progress: o.progress, complete: !!o.complete };
+    return acc;
+  }, {});
+
+  const overrideMut = useMutation({
+    mutationFn: (body: { taskUid: string; progress: number; complete: boolean }) =>
+      apiRequest("POST", `/api/projects/${pid}/programmes/${activeProg}/task-overrides`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/programmes/${activeProg}/task-overrides`] });
+    },
+  });
+
+  const handleSaveOverride = useCallback((uid: string, progress: number, complete: boolean) => {
+    overrideMut.mutate({ taskUid: uid, progress, complete });
+  }, [activeProg]);
+
   const tasks = taskData?.tasks ?? [];
   const cycle = taskData?.cycleDetectedDays;
 
@@ -854,7 +964,7 @@ export default function ProgrammePage() {
                             </td></tr>
                           );
                           return filtered.map(t => (
-                            <TaskRow key={t.uid} task={t} depth={(t.outlineLevel ?? 1) - 1} onEdit={openTaskEdit} />
+                            <TaskRow key={t.uid} task={t} depth={(t.outlineLevel ?? 1) - 1} onEdit={openTaskEdit} override={overridesMap[t.uid]} onSaveOverride={handleSaveOverride} />
                           ));
                         })()}
                       </tbody>
