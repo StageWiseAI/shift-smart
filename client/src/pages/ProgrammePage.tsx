@@ -106,20 +106,25 @@ function TaskRow({ task, depth, onEdit, override, onSaveOverride }: {
           {task.isMilestone && <Badge variant="outline" className="text-[10px] h-4 text-amber-600 border-amber-300">Milestone</Badge>}
           {task.isSummary && !task.isMilestone && <Badge variant="outline" className="text-[10px] h-4">Summary</Badge>}
         </td>
-        <td className="py-1.5 px-2 w-16">
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+        <td className="py-1.5 px-2 w-32">
+          <div className="flex items-center gap-1">
             {onSaveOverride && !task.isSummary && !task.isMilestone && (
               <button
-                className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all"
+                className={cn(
+                  "flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border transition-all",
+                  open
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background border-border text-muted-foreground hover:border-primary hover:text-primary"
+                )}
                 onClick={() => setOpen(o => !o)}
-                title="Update progress"
               >
                 <SlidersHorizontal className="h-3 w-3" />
+                {open ? "Close" : isComplete ? "Edit" : "Update"}
               </button>
             )}
             {onEdit && (
               <button
-                className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all"
+                className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all opacity-0 group-hover:opacity-100"
                 onClick={() => onEdit(task)}
                 title="Edit dates"
               >
