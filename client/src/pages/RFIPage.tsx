@@ -255,7 +255,7 @@ export default function RFIPage() {
 
   const { data: rfis = [], isLoading } = useQuery<RfiRecord[]>({
     queryKey: [`/api/projects/${projectId}/rfis`],
-    queryFn: () => apiRequest("GET", `/api/projects/${projectId}/rfis`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/projects/${projectId}/rfis`),
     refetchInterval: (query) => {
       const data = query.state.data as RfiRecord[] | undefined;
       const hasAnalysing = data?.some(r => r.title?.toLowerCase().includes("analysing"));
@@ -266,7 +266,7 @@ export default function RFIPage() {
   // ── Upload/extract mutation ────────────────────────────────────────────────
   const extractMut = useMutation({
     mutationFn: (rawText: string) =>
-      apiRequest("POST", `/api/projects/${projectId}/rfis/extract`, { rawText }).then(r => r.json()),
+      apiRequest("POST", `/api/projects/${projectId}/rfis/extract`, { rawText }),
     onSuccess: () => {
       setDocText("");
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/rfis`] });
@@ -317,7 +317,7 @@ export default function RFIPage() {
         projectId,
         sourceType: "manual",
         createdBy: user?.id,
-      }).then(r => r.json()),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/rfis`] });
       setForm(emptyForm);
@@ -329,7 +329,7 @@ export default function RFIPage() {
 
   const updateMut = useMutation({
     mutationFn: (data: any) =>
-      apiRequest("PATCH", `/api/projects/${projectId}/rfis/${editRfi?.id}`, data).then(r => r.json()),
+      apiRequest("PATCH", `/api/projects/${projectId}/rfis/${editRfi?.id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/rfis`] });
       setEditRfi(null);

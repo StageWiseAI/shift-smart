@@ -636,7 +636,7 @@ export default function ProgrammePage() {
       apiRequest("PATCH", `/api/projects/${pid}/programmes/${activeProg}/tasks/${encodeURIComponent(data.uid)}`, {
         newStart: data.newStart,
         newFinish: data.newFinish || undefined,
-      }).then((r: any) => r.json()),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/programmes/${activeProg}/tasks`] });
       setEditTask(null);

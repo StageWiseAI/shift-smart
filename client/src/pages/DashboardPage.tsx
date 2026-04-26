@@ -52,7 +52,7 @@ export default function DashboardPage() {
 
   // ── Create ────────────────────────────────────────────────────────────────
   const createProject = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/projects", data).then(r => r.json()),
+    mutationFn: (data: any) => apiRequest("POST", "/api/projects", data),
     onSuccess: (p) => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       toast({ title: "Project created" });
@@ -66,7 +66,7 @@ export default function DashboardPage() {
   // ── Update ────────────────────────────────────────────────────────────────
   const updateProject = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
-      apiRequest("PATCH", `/api/projects/${id}`, data).then(r => r.json()),
+      apiRequest("PATCH", `/api/projects/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       toast({ title: "Project updated" });

@@ -60,32 +60,32 @@ export default function ProjectPage() {
   const STALE = 5 * 60 * 1000; // 5 min
   const { data: rfis = [] } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/rfis`],
-    queryFn: () => apiRequest("GET", `/api/projects/${pid}/rfis`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/projects/${pid}/rfis`),
     staleTime: STALE,
   });
 
   const { data: deliveries = [] } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/deliveries`],
-    queryFn: () => apiRequest("GET", `/api/projects/${pid}/deliveries`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/projects/${pid}/deliveries`),
     staleTime: STALE,
   });
 
   const { data: prestarts = [] } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/prestart`],
-    queryFn: () => apiRequest("GET", `/api/projects/${pid}/prestart`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/projects/${pid}/prestart`),
     staleTime: STALE,
   });
 
   const { data: meetings = [] } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/meetings`],
-    queryFn: () => apiRequest("GET", `/api/projects/${pid}/meetings`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/projects/${pid}/meetings`),
     staleTime: STALE,
   });
 
   // Programme — long staleTime so tasks don’t reload on every navigation
-  const { data: programmes = [] } = useQuery<any[]>({
+  const { data: programmes = [], isLoading: progsLoading } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/programmes`],
-    queryFn: () => apiRequest("GET", `/api/projects/${pid}/programmes`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/projects/${pid}/programmes`),
     staleTime: STALE,
   });
 
@@ -93,7 +93,7 @@ export default function ProjectPage() {
 
   const { data: taskData, isLoading: tasksLoading } = useQuery<{ tasks: any[]; cycleDetectedDays: number | null }>({
     queryKey: [`/api/projects/${pid}/programmes/${latestProg?.id}/tasks`],
-    queryFn: () => apiRequest("GET", `/api/projects/${pid}/programmes/${latestProg.id}/tasks`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/projects/${pid}/programmes/${latestProg.id}/tasks`),
     enabled: !!latestProg?.id,
     staleTime: STALE,
   });
@@ -162,7 +162,8 @@ export default function ProjectPage() {
   if (loadingProject) return <Layout><div className="p-8 text-muted-foreground text-sm">Loading…</div></Layout>;
   if (!project) return <Layout><div className="p-8 text-muted-foreground text-sm">Project not found.</div></Layout>;
 
-  const hasProgramme = !!latestProg;
+  // Show programme health card while loading OR if a programme exists
+  const hasProgramme = !!latestProg || progsLoading;
 
   return (
     <Layout projectId={pid} projectName={project.name}>

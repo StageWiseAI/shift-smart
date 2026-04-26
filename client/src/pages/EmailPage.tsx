@@ -199,13 +199,13 @@ export default function EmailPage() {
   // Project info
   const { data: project } = useQuery<any>({
     queryKey: ["/api/projects", projectId],
-    queryFn: () => apiRequest("GET", `/api/projects/${projectId}`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/projects/${projectId}`),
   });
 
   // Emails list
   const { data: emails = [], isLoading } = useQuery<EmailRecord[]>({
     queryKey: ["/api/projects", projectId, "emails"],
-    queryFn: () => apiRequest("GET", `/api/projects/${projectId}/emails`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/projects/${projectId}/emails`),
     refetchInterval: (query) => {
       // Auto-refresh while any email is still pending
       const data = query.state.data as EmailRecord[] | undefined;
@@ -216,7 +216,7 @@ export default function EmailPage() {
 
   const submitMutation = useMutation({
     mutationFn: (rawText: string) =>
-      apiRequest("POST", `/api/projects/${projectId}/emails`, { rawText }).then(r => r.json()),
+      apiRequest("POST", `/api/projects/${projectId}/emails`, { rawText }),
     onSuccess: () => {
       setPastedText("");
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "emails"] });
