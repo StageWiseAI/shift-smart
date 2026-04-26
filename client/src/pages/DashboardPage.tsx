@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, FolderOpen, CalendarDays, Building2, ChevronRight } from "lucide-react";
+import { Plus, FolderOpen, CalendarDays, Building2, ChevronRight, Trash2 } from "lucide-react";
 
 interface Project {
   id: number;
@@ -28,9 +28,19 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [showNew, setShowNew] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [form, setForm] = useState({ name: "", contractNumber: "", client: "", startDate: "", endDate: "" });
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({ queryKey: ["/api/projects"] });
+
+  const deleteProject = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/projects/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({ title: "Project deleted" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
 
   const createProject = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/projects", data),
@@ -50,7 +60,7 @@ export default function DashboardPage() {
     createProject.mutate(form);
   }
 
-  const active = projects.filter(p => p.status === "active");
+  const active = projects.filter((p: any) => p.status === "active");
 
   return (
     <Layout>
@@ -93,7 +103,18 @@ export default function DashboardPage() {
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base leading-tight">{p.name}</CardTitle>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors flex-shrink-0 mt-0.5" />
+                    <div className="flex items-center gap-1">
+                      {user?.role === "admin" && (
+                        <button
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(p.id); }}
+                          data-testid={`button-delete-project-${p.id}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors flex-shrink-0 mt-0.5" />
+                    </div>
                   </div>
                   {p.contractNumber && (
                     <p className="text-xs text-muted-foreground font-mono">{p.contractNumber}</p>
@@ -162,6 +183,26 @@ export default function DashboardPage() {
               <Button type="submit" disabled={createProject.isPending}>Create Project</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Delete Dialog */}
+      <Dialog open={confirmDelete !== null} onOpenChange={() => setConfirmDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Project?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete the project and all its data — programme, materials, meetings, emails and RFIs. This cannot be undone.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteProject.isPending}
+              onClick={() => { if (confirmDelete) { deleteProject.mutate(confirmDelete); setConfirmDelete(null); } }}
+            >
+              {deleteProject.isPending ? "Deleting…" : "Delete Project"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </Layout>

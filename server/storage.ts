@@ -186,6 +186,7 @@ export interface IStorage {
   getProjectById(id: number): Project | undefined;
   createProject(data: InsertProject): Project;
   updateProject(id: number, data: Partial<InsertProject>): Project | undefined;
+  deleteProject(id: number): void;
   addProjectMember(projectId: number, userId: number): void;
   removeProjectMember(projectId: number, userId: number): void;
   getProjectMembers(projectId: number): User[];
@@ -289,6 +290,20 @@ class SqliteStorage implements IStorage {
       .run(data.name ?? p.name, data.contractNumber ?? p.contractNumber, data.client ?? p.client,
         data.startDate ?? p.startDate, data.endDate ?? p.endDate, data.status ?? p.status, id);
     return this.getProjectById(id);
+  }
+  deleteProject(id: number) {
+    // Delete all related data first
+    sqlite.prepare("DELETE FROM project_members WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM programmes WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM eot_events WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM cycle_overrides WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM material_deliveries WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM prestart_meetings WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM meetings WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM audit_log WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM emails WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM rfis WHERE project_id=?").run(id);
+    sqlite.prepare("DELETE FROM projects WHERE id=?").run(id);
   }
   addProjectMember(projectId: number, userId: number) {
     const exists = sqlite.prepare("SELECT id FROM project_members WHERE project_id=? AND user_id=?").get(projectId, userId);

@@ -253,6 +253,12 @@ export function registerRoutes(app: Express) {
     res.json(project);
   });
 
+  app.delete("/api/projects/:id", requireAuth, requireAdmin, (req: any, res) => {
+    storage.deleteProject(parseInt(req.params.id));
+    audit(req, "delete", "project", req.params.id, "Project deleted");
+    res.json({ ok: true });
+  });
+
   app.get("/api/projects/:id/members", requireAuth, (req: any, res) => {
     res.json(storage.getProjectMembers(parseInt(req.params.id)).map(({ password: _, ...u }) => u));
   });
