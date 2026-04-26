@@ -484,6 +484,12 @@ export function registerRoutes(app: Express) {
     res.json(m);
   });
 
+  app.delete("/api/projects/:id/prestart/:mid", requireAuth, (req: any, res) => {
+    storage.deletePrestartMeeting(parseInt(req.params.mid));
+    audit(req, "delete", "prestart", req.params.mid, "Pre-start deleted", parseInt(req.params.id));
+    res.json({ ok: true });
+  });
+
   app.post("/api/projects/:id/prestart/:mid/plan", requireAuth, (req: any, res) => {
     const { data, mime } = req.body;
     storage.updatePrestartMeeting(parseInt(req.params.mid), { sitePlanData: data, sitePlanMime: mime });

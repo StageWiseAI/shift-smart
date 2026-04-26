@@ -221,6 +221,7 @@ export interface IStorage {
   addPrestartPhoto(data: any): any;
   getPrestartPhotoData(id: number): any;
   deletePrestartPhoto(id: number): void;
+  deletePrestartMeeting(id: number): void;
   getPrestartAttendance(meetingId: number): any[];
   addPrestartAttendee(data: any): any;
   removePrestartAttendee(id: number): void;
@@ -420,6 +421,11 @@ class SqliteStorage implements IStorage {
   }
   deletePrestartPhoto(id: number) {
     sqlite.prepare("DELETE FROM prestart_photos WHERE id=?").run(id);
+  }
+  deletePrestartMeeting(id: number) {
+    sqlite.prepare("DELETE FROM prestart_photos WHERE meeting_id=?").run(id);
+    sqlite.prepare("DELETE FROM prestart_attendance WHERE meeting_id=?").run(id);
+    sqlite.prepare("DELETE FROM prestart_meetings WHERE id=?").run(id);
   }
   getPrestartAttendance(meetingId: number) {
     return sqlite.prepare("SELECT * FROM prestart_attendance WHERE meeting_id=?").all(meetingId);

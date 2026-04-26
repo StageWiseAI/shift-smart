@@ -192,6 +192,7 @@ export default function PreStartPage() {
   const [newForm, setNewForm] = useState({ title: "", meetingDate: new Date().toISOString().split("T")[0] });
   const [showClose, setShowClose] = useState(false);
   const [attendeeForm, setAttendeeForm] = useState({ name: "", company: "", role: "" });
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // Photo upload state
   const [photoCaption, setPhotoCaption] = useState("");
@@ -246,6 +247,16 @@ export default function PreStartPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/prestart/${meetingId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/prestart`] });
     },
+  });
+
+  const deleteMeetingMut = useMutation({
+    mutationFn: (mid: number) => apiRequest("DELETE", `/api/projects/${pid}/prestart/${mid}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/prestart`] });
+      setConfirmDeleteId(null);
+      toast({ title: "Pre-start deleted" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const closeMut = useMutation({
@@ -387,22 +398,49 @@ export default function PreStartPage() {
             <div className="space-y-2">
               {meetings.map((m: any) => (
                 <div key={m.id}
-                  className="flex items-center gap-3 p-3 bg-card border rounded-lg hover:shadow-sm cursor-pointer transition-shadow"
+                  className="flex items-center gap-3 p-3 bg-card border rounded-lg hover:shadow-sm cursor-pointer transition-shadow group"
                   onClick={() => navigate(`/projects/${pid}/prestart/${m.id}`)}
                 >
                   <div className="p-2 bg-amber-50 text-amber-700 rounded-lg"><HardHat className="h-4 w-4" /></div>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{m.title}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{m.title}</p>
                     <p className="text-xs text-muted-foreground">{m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : ""}</p>
                   </div>
-                  <Badge variant={m.status === "closed" ? "secondary" : "outline"} className="text-[10px]">
+                  <Badge variant={m.status === "closed" ? "secondary" : "outline"} className="text-[10px] shrink-0">
                     {m.status === "closed" ? "Closed" : "Draft"}
                   </Badge>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                    onClick={e => { e.stopPropagation(); setConfirmDeleteId(m.id); }}
+                    title="Delete pre-start"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* ── Confirm delete dialog ── */}
+        <Dialog open={!!confirmDeleteId} onOpenChange={open => { if (!open) setConfirmDeleteId(null); }}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Delete Pre-Start?</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">This will permanently delete the pre-start meeting and all its photos. This cannot be undone.</p>
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={deleteMeetingMut.isPending}
+                onClick={() => confirmDeleteId && deleteMeetingMut.mutate(confirmDeleteId)}
+              >
+                {deleteMeetingMut.isPending ? "Deleting…" : "Delete"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={showNew} onOpenChange={setShowNew}>
           <DialogContent>

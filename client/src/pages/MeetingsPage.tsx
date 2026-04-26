@@ -38,6 +38,7 @@ export default function MeetingsPage() {
   const [newAttendee, setNewAttendee] = useState("");
   const [recording, setRecording] = useState(false);
   const [audioChunks, setAudioChunks] = useState<BlobPart[]>([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const [newActionItem, setNewActionItem] = useState({ item: "", owner: "", due: "" });
 
@@ -186,17 +187,26 @@ export default function MeetingsPage() {
                     onClick={() => navigate(`/projects/${pid}/meetings/${m.id}`)}
                   >
                     <div className="p-2 bg-green-50 text-green-700 rounded-lg"><ClipboardList className="h-4 w-4" /></div>
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{m.title}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{m.title}</p>
                       <p className="text-xs text-muted-foreground">
                         {m.meeting_date ? new Date(m.meeting_date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : ""}{m.meeting_time ? ` · ${m.meeting_time}` : ""}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[10px]">{tl}</Badge>
-                      <Badge variant={m.status === "confirmed" ? "default" : "secondary"} className="text-[10px]">
+                      <Badge variant="outline" className="text-[10px] shrink-0">{tl}</Badge>
+                      <Badge variant={m.status === "confirmed" ? "default" : "secondary"} className="text-[10px] shrink-0">
                         {m.status === "confirmed" ? "Confirmed" : "Draft"}
                       </Badge>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                        onClick={e => { e.stopPropagation(); setConfirmDeleteId(m.id); }}
+                        title="Delete meeting"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
                 );
@@ -204,6 +214,24 @@ export default function MeetingsPage() {
             </div>
           )}
         </div>
+
+        {/* ── Confirm delete dialog ── */}
+        <Dialog open={!!confirmDeleteId} onOpenChange={open => { if (!open) setConfirmDeleteId(null); }}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Delete Meeting?</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">This will permanently delete the meeting and all its minutes. This cannot be undone.</p>
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={deleteMut.isPending}
+                onClick={() => confirmDeleteId && deleteMut.mutate(confirmDeleteId)}
+              >
+                {deleteMut.isPending ? "Deleting…" : "Delete"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={showNew} onOpenChange={setShowNew}>
           <DialogContent>
