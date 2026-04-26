@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import Layout from "./Layout";
@@ -13,8 +13,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Plus, ClipboardList, ArrowLeft, Mic, MicOff, Square, CheckCircle2, Circle, Plus as PlusIcon, Trash2, UserPlus, CheckSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Plus, ClipboardList, ArrowLeft, Mic, Square, CheckCircle2, Circle,
+  Trash2, UserPlus, CheckSquare, Sparkles, Upload, FileText, X
+} from "lucide-react";
 
 const MEETING_TYPES = [
   { value: "general", label: "General" },
@@ -23,7 +26,7 @@ const MEETING_TYPES = [
   { value: "safety", label: "Safety Meeting" },
 ];
 
-function uuid() { return Math.random().toString(36).slice(2,10); }
+function uuid() { return Math.random().toString(36).slice(2, 10); }
 
 export default function MeetingsPage() {
   const { id, mid } = useParams<{ id: string; mid?: string }>();
@@ -37,9 +40,12 @@ export default function MeetingsPage() {
   const [newForm, setNewForm] = useState({ title: "", meetingDate: new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Brisbane" }), meetingTime: "", type: "general" });
   const [newAttendee, setNewAttendee] = useState("");
   const [recording, setRecording] = useState(false);
-  const [audioChunks, setAudioChunks] = useState<BlobPart[]>([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [newActionItem, setNewActionItem] = useState({ item: "", owner: "", due: "" });
 
   const { data: project } = useQuery<any>({ queryKey: [`/api/projects/${pid}`] });
@@ -78,6 +84,8 @@ export default function MeetingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/meetings`] });
       toast({ title: "Meeting deleted" });
+      if (meetingId) navigate(`/projects/${pid}/meetings`);
+      setConfirmDeleteId(null);
     },
   });
 
@@ -121,7 +129,29 @@ export default function MeetingsPage() {
     updateField("actionsJson", JSON.stringify(actions.filter(a => a.id !== aid)));
   }
 
-  // Audio recording
+  // ── AI Extract ─────────────────────────────────────────────────────────────
+  async function runExtract(audioBase64?: string, mimeType?: string) {
+    if (!meetingId) return;
+    setExtracting(true);
+    try {
+      const body: any = {};
+      if (audioBase64) { body.audioBase64 = audioBase64; body.mimeType = mimeType; }
+      const res = await apiRequest("POST", `/api/projects/${pid}/meetings/${meetingId}/analyse`, body);
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/meetings/${meetingId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/meetings`] });
+      toast({
+        title: "Extraction complete",
+        description: `Found ${data.actions?.length ?? 0} action item${data.actions?.length !== 1 ? "s" : ""}${data.rfisCreated ? ` · ${data.rfisCreated} RFI${data.rfisCreated > 1 ? "s" : ""} raised` : ""}`,
+      });
+    } catch (e: any) {
+      toast({ title: "Extraction failed", description: e.message, variant: "destructive" });
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  // ── Audio recording ─────────────────────────────────────────────────────────
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -131,17 +161,19 @@ export default function MeetingsPage() {
       mr.onstop = () => {
         const blob = new Blob(chunks, { type: "audio/webm" });
         const reader = new FileReader();
-        reader.onload = ev => {
+        reader.onload = async ev => {
           const b64 = (ev.target?.result as string).split(",")[1];
-          updateMut.mutate({ audioData: b64, audioMime: "audio/webm" });
-          toast({ title: "Recording saved" });
+          // Save audio first
+          await updateMut.mutateAsync({ audioData: b64, audioMime: "audio/webm" });
+          toast({ title: "Recording saved — extracting actions…" });
+          // Then auto-extract
+          await runExtract(b64, "audio/webm");
         };
         reader.readAsDataURL(blob);
       };
       mr.start();
       mediaRef.current = mr;
       setRecording(true);
-      setAudioChunks([]);
     } catch {
       toast({ title: "Microphone not available", variant: "destructive" });
     }
@@ -149,8 +181,44 @@ export default function MeetingsPage() {
 
   function stopRecording() {
     mediaRef.current?.stop();
+    mediaRef.current?.stream?.getTracks().forEach(t => t.stop());
     setRecording(false);
   }
+
+  // ── File upload (audio or text file) ───────────────────────────────────────
+  async function handleFile(file: File) {
+    if (!meetingId) return;
+    setUploadedFileName(file.name);
+
+    // Text files (pdf not supported client-side, so just .txt / .docx plain text read)
+    if (file.type.startsWith("audio/") || file.name.endsWith(".webm") || file.name.endsWith(".mp3") || file.name.endsWith(".m4a") || file.name.endsWith(".wav") || file.name.endsWith(".ogg")) {
+      const reader = new FileReader();
+      reader.onload = async ev => {
+        const b64 = (ev.target?.result as string).split(",")[1];
+        await updateMut.mutateAsync({ audioData: b64, audioMime: file.type || "audio/webm" });
+        toast({ title: "Audio uploaded — extracting…" });
+        await runExtract(b64, file.type || "audio/webm");
+      };
+      reader.readAsDataURL(file);
+    } else {
+      // Treat as plain text (txt, csv, docx exported as txt etc)
+      const reader = new FileReader();
+      reader.onload = async ev => {
+        const text = ev.target?.result as string;
+        await updateMut.mutateAsync({ minutesText: text });
+        toast({ title: "File loaded — extracting…" });
+        await runExtract();
+      };
+      reader.readAsText(file);
+    }
+  }
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }, [meetingId, m]);
 
   function confirmMeeting() {
     updateField("status", m?.status === "confirmed" ? "draft" : "confirmed");
@@ -174,7 +242,7 @@ export default function MeetingsPage() {
             <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl text-center">
               <ClipboardList className="h-10 w-10 text-muted-foreground/40 mb-3" />
               <p className="font-medium">No meetings yet</p>
-              <p className="text-sm text-muted-foreground mt-1">Record subbie notes, programme meetings, safety discussions</p>
+              <p className="text-sm text-muted-foreground mt-1">Record or upload minutes and let AI pull out action items automatically</p>
               <Button size="sm" className="mt-4" onClick={() => setShowNew(true)}><Plus className="h-4 w-4 mr-1" /> New Meeting</Button>
             </div>
           ) : (
@@ -215,18 +283,14 @@ export default function MeetingsPage() {
           )}
         </div>
 
-        {/* ── Confirm delete dialog ── */}
+        {/* Confirm delete */}
         <Dialog open={!!confirmDeleteId} onOpenChange={open => { if (!open) setConfirmDeleteId(null); }}>
           <DialogContent>
             <DialogHeader><DialogTitle>Delete Meeting?</DialogTitle></DialogHeader>
             <p className="text-sm text-muted-foreground">This will permanently delete the meeting and all its minutes. This cannot be undone.</p>
             <DialogFooter className="mt-4">
               <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
-              <Button
-                variant="destructive"
-                disabled={deleteMut.isPending}
-                onClick={() => confirmDeleteId && deleteMut.mutate(confirmDeleteId)}
-              >
+              <Button variant="destructive" disabled={deleteMut.isPending} onClick={() => confirmDeleteId && deleteMut.mutate(confirmDeleteId)}>
                 {deleteMut.isPending ? "Deleting…" : "Delete"}
               </Button>
             </DialogFooter>
@@ -251,7 +315,7 @@ export default function MeetingsPage() {
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
-                <Button type="submit">Create Meeting</Button>
+                <Button type="submit" disabled={createMut.isPending}>Create Meeting</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -300,6 +364,90 @@ export default function MeetingsPage() {
         </div>
 
         <div className="space-y-6">
+          {/* ── Capture section ── */}
+          <section className="rounded-xl border border-border/60 bg-muted/20 p-4">
+            <h2 className="text-sm font-semibold mb-3">Capture Meeting</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+              {/* Record Meeting */}
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs font-medium mb-2 text-muted-foreground uppercase tracking-wide">Live Recording</p>
+                {recording ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-950/40 rounded-lg text-xs text-red-600 dark:text-red-400">
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                      Recording in progress…
+                    </div>
+                    <Button size="sm" variant="destructive" className="w-full h-8 text-xs" onClick={stopRecording}>
+                      <Square className="h-3 w-3 mr-1.5" /> Stop &amp; Extract Actions
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Record the meeting live — AI will transcribe and pull out action items automatically when you stop.</p>
+                    <Button size="sm" className="w-full h-8 text-xs" onClick={startRecording} disabled={extracting}>
+                      <Mic className="h-3 w-3 mr-1.5" /> Record Meeting
+                    </Button>
+                    {m.audio_data && (
+                      <div className="mt-1">
+                        <p className="text-[10px] text-muted-foreground mb-1">Saved recording:</p>
+                        <audio controls src={`data:${m.audio_mime};base64,${m.audio_data}`} className="w-full h-8" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Upload / Paste */}
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs font-medium mb-2 text-muted-foreground uppercase tracking-wide">Upload or Paste Minutes</p>
+                <p className="text-xs text-muted-foreground mb-2">Drop a file (audio or text) or paste your notes below, then hit Extract.</p>
+
+                {/* Drop zone */}
+                <div
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-3 text-center text-xs transition-colors mb-2 cursor-pointer",
+                    dragOver ? "border-primary bg-primary/5" : "border-border/60 hover:border-primary/40"
+                  )}
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onDrop}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                  {uploadedFileName ? (
+                    <span className="text-primary font-medium">{uploadedFileName}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Drop audio or text file here, or click to browse</span>
+                  )}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    className="hidden"
+                    accept="audio/*,.txt,.doc,.docx,.pdf"
+                    onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
+                  />
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-8 text-xs"
+                  onClick={() => runExtract()}
+                  disabled={extracting}
+                >
+                  {extracting ? (
+                    <><span className="mr-1.5 h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" /> Extracting…</>
+                  ) : (
+                    <><Sparkles className="h-3 w-3 mr-1.5" /> Extract Actions &amp; Notes</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <Separator />
+
           {/* Attendees */}
           <section>
             <h2 className="text-sm font-semibold mb-2">Attendees</h2>
@@ -348,44 +496,18 @@ export default function MeetingsPage() {
 
           <Separator />
 
-          {/* Minutes */}
+          {/* Notes / Minutes text */}
           <section>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold">Meeting Notes / Minutes</h2>
-              <div className="flex items-center gap-2">
-                {m.audio_data && (
-                  <Badge variant="outline" className="text-[10px]">🎙 Recording saved</Badge>
-                )}
-                {recording ? (
-                  <Button size="sm" variant="destructive" className="h-7 text-xs animate-pulse" onClick={stopRecording}>
-                    <Square className="h-3 w-3 mr-1" /> Stop Recording
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={startRecording}>
-                    <Mic className="h-3 w-3 mr-1" /> Record
-                  </Button>
-                )}
-              </div>
+              <h2 className="text-sm font-semibold">Meeting Notes</h2>
             </div>
-            {recording && (
-              <div className="mb-2 p-2 bg-red-50 dark:bg-red-950 rounded text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                Recording in progress… press Stop Recording when done
-              </div>
-            )}
             <Textarea
               defaultValue={m.minutes_text ?? ""}
               onBlur={e => updateField("minutesText", e.target.value)}
-              placeholder="Type meeting notes, decisions, key points discussed…&#10;&#10;Or use the Record button to capture a voice recording."
+              placeholder={"Type or paste meeting notes here…\n\nYou can also record live or upload a file above — AI will extract action items automatically."}
               rows={8}
               key={m.id}
             />
-            {m.audio_data && (
-              <div className="mt-2">
-                <p className="text-xs text-muted-foreground mb-1">Audio recording:</p>
-                <audio controls src={`data:${m.audio_mime};base64,${m.audio_data}`} className="w-full h-8" />
-              </div>
-            )}
           </section>
 
           <Separator />
@@ -397,7 +519,7 @@ export default function MeetingsPage() {
               <Badge variant="outline" className="text-[10px]">{actions.filter(a => a.status === "open").length} open</Badge>
             </div>
             <div className="space-y-2 mb-3">
-              {actions.length === 0 ? <p className="text-sm text-muted-foreground italic">No action items</p> : (
+              {actions.length === 0 ? <p className="text-sm text-muted-foreground italic">No action items — use Record or Extract to pull these from the meeting automatically</p> : (
                 actions.map(a => (
                   <div key={a.id} className="flex items-start gap-3 p-2.5 border rounded-lg text-sm">
                     <button onClick={() => toggleAction(a.id)} className="flex-shrink-0 mt-0.5">
@@ -419,7 +541,7 @@ export default function MeetingsPage() {
                 ))
               )}
             </div>
-            {/* Add action */}
+            {/* Add action manually */}
             <div className="flex items-end gap-2 flex-wrap p-3 bg-muted/30 rounded-lg">
               <div className="space-y-1 flex-1 min-w-40">
                 <Label className="text-xs">Action</Label>
@@ -438,6 +560,20 @@ export default function MeetingsPage() {
           </section>
         </div>
       </div>
+
+      {/* Confirm delete */}
+      <Dialog open={!!confirmDeleteId} onOpenChange={open => { if (!open) setConfirmDeleteId(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Meeting?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete the meeting and all its minutes. This cannot be undone.</p>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={deleteMut.isPending} onClick={() => confirmDeleteId && deleteMut.mutate(confirmDeleteId)}>
+              {deleteMut.isPending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

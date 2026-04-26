@@ -56,39 +56,46 @@ export default function ProjectPage() {
     queryKey: [`/api/projects/${pid}`],
   });
 
-  // Live data queries
+  // Live data queries — staleTime so navigating back doesn't re-fetch
+  const STALE = 5 * 60 * 1000; // 5 min
   const { data: rfis = [] } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/rfis`],
     queryFn: () => apiRequest("GET", `/api/projects/${pid}/rfis`).then(r => r.json()),
+    staleTime: STALE,
   });
 
   const { data: deliveries = [] } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/deliveries`],
     queryFn: () => apiRequest("GET", `/api/projects/${pid}/deliveries`).then(r => r.json()),
+    staleTime: STALE,
   });
 
   const { data: prestarts = [] } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/prestart`],
     queryFn: () => apiRequest("GET", `/api/projects/${pid}/prestart`).then(r => r.json()),
+    staleTime: STALE,
   });
 
   const { data: meetings = [] } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/meetings`],
     queryFn: () => apiRequest("GET", `/api/projects/${pid}/meetings`).then(r => r.json()),
+    staleTime: STALE,
   });
 
-  // Programme — get latest programme, then its tasks
+  // Programme — long staleTime so tasks don’t reload on every navigation
   const { data: programmes = [] } = useQuery<any[]>({
     queryKey: [`/api/projects/${pid}/programmes`],
     queryFn: () => apiRequest("GET", `/api/projects/${pid}/programmes`).then(r => r.json()),
+    staleTime: STALE,
   });
 
   const latestProg = programmes[0] ?? null;
 
-  const { data: taskData } = useQuery<{ tasks: any[]; cycleDetectedDays: number | null }>({
+  const { data: taskData, isLoading: tasksLoading } = useQuery<{ tasks: any[]; cycleDetectedDays: number | null }>({
     queryKey: [`/api/projects/${pid}/programmes/${latestProg?.id}/tasks`],
     queryFn: () => apiRequest("GET", `/api/projects/${pid}/programmes/${latestProg.id}/tasks`).then(r => r.json()),
     enabled: !!latestProg?.id,
+    staleTime: STALE,
   });
 
   const allTasks = taskData?.tasks ?? [];
@@ -182,16 +189,13 @@ export default function ProjectPage() {
         </div>
 
         {/* ── Programme Health (Critical + Monitor) — full width ── */}
-        {hasProgramme && (
+        {(hasProgramme || tasksLoading) && (
           <Card className="border-border/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <CalendarDays className="h-4 w-4 text-blue-500" />
                   Programme Health
-                  {latestProg?.label && (
-                    <span className="text-[10px] text-muted-foreground font-normal">— {latestProg.label}</span>
-                  )}
                 </span>
                 <Button
                   variant="ghost"
@@ -204,7 +208,11 @@ export default function ProjectPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              {criticalTasks.length === 0 && monitorTasks.length === 0 ? (
+              {tasksLoading ? (
+                <div className="space-y-2 py-1">
+                  {[1,2,3].map(i => <div key={i} className="h-5 bg-muted rounded animate-pulse" />)}
+                </div>
+              ) : criticalTasks.length === 0 && monitorTasks.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-2 flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> No critical or monitor items due in the next 30 days
                 </p>

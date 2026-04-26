@@ -425,6 +425,12 @@ export function registerRoutes(app: Express) {
     res.json({ eot, tasks: adjusted });
   });
 
+  app.delete("/api/projects/:id/eot/:eid", requireAuth, (req: any, res) => {
+    storage.deleteEotEvent(parseInt(req.params.eid));
+    audit(req, "delete", "eot", parseInt(req.params.eid), "Delay log entry deleted", parseInt(req.params.id));
+    res.json({ ok: true });
+  });
+
   // ── Cycle override ────────────────────────────────────────────────────────────
   app.post("/api/projects/:id/programmes/:progId/cycle", requireAuth, (req: any, res) => {
     const { newCycleDays } = req.body;

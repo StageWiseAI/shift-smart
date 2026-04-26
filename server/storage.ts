@@ -201,6 +201,7 @@ export interface IStorage {
   // EOT
   getEotEvents(projectId: number): EotEvent[];
   createEotEvent(data: InsertEot): EotEvent;
+  deleteEotEvent(id: number): void;
 
   // Cycle overrides
   createCycleOverride(data: any): any;
@@ -354,6 +355,9 @@ class SqliteStorage implements IStorage {
       VALUES (?,?,?,?,?,?,?,?,?) RETURNING *`)
       .get(data.projectId, data.programmeId, data.type, data.description, data.delayHours,
         data.appliedFrom, data.adjustedTasksJson, now(), data.createdBy) as EotEvent;
+  }
+  deleteEotEvent(id: number) {
+    sqlite.prepare("DELETE FROM eot_events WHERE id=?").run(id);
   }
 
   // ── Cycle overrides ──────────────────────────────────────────────────────────

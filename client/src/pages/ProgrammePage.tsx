@@ -507,6 +507,7 @@ export default function ProgrammePage() {
 
   // EOT form
   const [eotForm, setEotForm] = useState({ type: "weather", description: "", delayHours: "8", appliedFrom: "" });
+  const [confirmDeleteEotId, setConfirmDeleteEotId] = useState<number | null>(null);
   // Cycle form
   const [cycleForm, setCycleForm] = useState({ newCycleDays: "" });
   // Lookahead form
@@ -534,9 +535,11 @@ export default function ProgrammePage() {
 
   const activeProg = selectedProgId ?? (programmes[0]?.id ?? null);
 
+  const STALE = 5 * 60 * 1000;
   const { data: taskData, isLoading: tasksLoading } = useQuery<{ tasks: Task[]; cycleDetectedDays: number | null }>({
     queryKey: [`/api/projects/${pid}/programmes/${activeProg}/tasks`],
     enabled: !!activeProg,
+    staleTime: STALE,
   });
 
   const eotEvents = useQuery<any[]>({ queryKey: [`/api/projects/${pid}/eot`] });
@@ -583,6 +586,16 @@ export default function ProgrammePage() {
       setShowEOT(false);
       setTab("eot-result");
       toast({ title: "Delay saved", description: `Programme shifted by ${eotForm.delayHours}h` });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteEotMut = useMutation({
+    mutationFn: (eid: number) => apiRequest("DELETE", `/api/projects/${pid}/eot/${eid}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${pid}/eot`] });
+      setConfirmDeleteEotId(null);
+      toast({ title: "Delay log entry deleted" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -851,14 +864,15 @@ export default function ProgrammePage() {
                   </div>
                 ) : (eotEvents.data ?? []).map((e: any) => {
                   const typeLabel = e.type === "weather" ? "Bad Weather" : e.type === "ir" ? "IR Event" : "Other";
-                  const hours = e.delay_hours ?? e.delayHours;
+                  const hours = e.delay_hours ?? e.delayHours ?? 0;
                   const days = Math.max(1, Math.round(hours / 8));
+                  // Description: show custom text if set, otherwise fall back to type label
+                  const desc = e.description && e.description !== e.type ? e.description : typeLabel;
                   return (
                     <Card
                       key={e.id}
-                      className="cursor-pointer hover:border-primary/40 transition-colors"
+                      className="cursor-pointer hover:border-primary/40 transition-colors group"
                       onClick={() => {
-                        // Reconstruct result view from stored data
                         const baseTasks = taskData?.tasks ?? [];
                         const adjusted = JSON.parse(e.adjusted_tasks_json ?? "[]");
                         setEotResult({
@@ -866,7 +880,7 @@ export default function ProgrammePage() {
                           adjusted,
                           delayHours: hours,
                           appliedFrom: e.applied_from,
-                          description: e.description,
+                          description: desc,
                         });
                         setTab("eot-result");
                       }}
@@ -876,13 +890,23 @@ export default function ProgrammePage() {
                           <CloudRain className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{e.description}</p>
+                          <p className="text-sm font-medium truncate">{desc}</p>
                           <p className="text-xs text-muted-foreground">
-                            {days === 1 ? "Half day (4h)" : `${days} day${days > 1 ? "s" : ""} (${hours}h)`} delay from {fmtDate(e.applied_from)}
+                            {hours > 0
+                              ? (days === 1 ? "Half day (4h)" : `${days} day${days > 1 ? "s" : ""} (${hours}h)`)
+                              : typeLabel
+                            } delay from {fmtDate(e.applied_from)}
                           </p>
                         </div>
                         <Badge variant="outline" className="text-xs shrink-0">{typeLabel}</Badge>
                         <span className="text-xs text-muted-foreground shrink-0">{fmtDate(e.created_at)}</span>
+                        <button
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 hover:text-red-600 text-muted-foreground transition-all shrink-0"
+                          onClick={ev => { ev.stopPropagation(); setConfirmDeleteEotId(e.id); }}
+                          title="Delete this delay entry"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </CardContent>
                     </Card>
                   );
@@ -979,6 +1003,24 @@ export default function ProgrammePage() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Delay Confirm Dialog ── */}
+      <Dialog open={!!confirmDeleteEotId} onOpenChange={open => { if (!open) setConfirmDeleteEotId(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Delay Entry?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently remove this delay log entry. It will not automatically reverse the task shifts that were applied.</p>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setConfirmDeleteEotId(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteEotMut.isPending}
+              onClick={() => confirmDeleteEotId && deleteEotMut.mutate(confirmDeleteEotId)}
+            >
+              {deleteEotMut.isPending ? "Deleting…" : "Delete Entry"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
