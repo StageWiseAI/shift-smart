@@ -312,7 +312,7 @@ export function registerRoutes(app: Express) {
   app.get("/api/projects/:id/programmes/:progId/tasks", requireAuth, (req: any, res) => {
     const prog = storage.getProgrammeById(parseInt(req.params.progId));
     if (!prog) return res.status(404).json({ error: "Not found" });
-    res.json({ tasks: JSON.parse(prog.tasksJson), cycleDetectedDays: prog.cycleDetectedDays });
+    res.json({ tasks: JSON.parse(( prog as any).tasks_json), cycleDetectedDays: ( prog as any).cycle_detected_days });
   });
 
   // Lookahead
@@ -320,7 +320,7 @@ export function registerRoutes(app: Express) {
     const prog = storage.getProgrammeById(parseInt(req.params.progId));
     if (!prog) return res.status(404).json({ error: "Not found" });
     const { from, weeks = "2", section } = req.query as any;
-    const tasks = JSON.parse(prog.tasksJson);
+    const tasks = JSON.parse(( prog as any).tasks_json);
     const fromDate = from || new Date().toISOString().split("T")[0];
     const result = getLookahead(tasks, fromDate, parseInt(weeks), section);
     res.json({ tasks: result, from: fromDate, weeks: parseInt(weeks), section: section || null });
@@ -342,8 +342,8 @@ export function registerRoutes(app: Express) {
     // Apply latest EOT chain if any
     const prevEots = storage.getEotEvents(parseInt(req.params.id)).filter(e => e.programmeId === parseInt(programmeId));
     let baseTasks = prevEots.length > 0
-      ? JSON.parse(prevEots[0].adjustedTasksJson)
-      : JSON.parse(prog.tasksJson);
+      ? JSON.parse((prevEots[0] as any).adjusted_tasks_json)
+      : JSON.parse(( prog as any).tasks_json);
 
     const adjusted = shiftTasksFromDate(baseTasks, appliedFrom, parseFloat(delayHours));
     const eot = storage.createEotEvent({
@@ -366,8 +366,8 @@ export function registerRoutes(app: Express) {
     if (!newCycleDays) return res.status(400).json({ error: "newCycleDays required" });
     const prog = storage.getProgrammeById(parseInt(req.params.progId));
     if (!prog) return res.status(404).json({ error: "Not found" });
-    const originalCycle = prog.cycleDetectedDays || 8;
-    const tasks = JSON.parse(prog.tasksJson);
+    const originalCycle = ( prog as any).cycle_detected_days || 8;
+    const tasks = JSON.parse(( prog as any).tasks_json);
     const generated = applyNewCycle(tasks, originalCycle, parseFloat(newCycleDays));
     const co = storage.createCycleOverride({
       projectId: parseInt(req.params.id),
