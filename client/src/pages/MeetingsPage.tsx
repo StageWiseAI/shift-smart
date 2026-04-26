@@ -157,18 +157,21 @@ export default function MeetingsPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);
       const chunks: BlobPart[] = [];
-      mr.ondataavailable = e => chunks.push(e.data);
+      mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
       mr.onstop = () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
+        if (chunks.length === 0) {
+          toast({ title: "Recording was empty", description: "No audio was captured", variant: "destructive" });
+          return;
+        }
+        const mimeType = mr.mimeType || "audio/webm";
+        const blob = new Blob(chunks, { type: mimeType });
         const reader = new FileReader();
         reader.onload = async ev => {
           const b64 = (ev.target?.result as string).split(",")[1];
           try {
-            // Save audio to meeting record first
-            await updateMut.mutateAsync({ audioData: b64, audioMime: "audio/webm" });
-            toast({ title: "Recording saved — transcribing and extracting actions…" });
-            // Then send audio to Whisper + GPT via analyse route
-            await runExtract(b64, "audio/webm");
+            toast({ title: "Transcribing recording…", description: "This may take a moment" });
+            // Send directly to analyse — it saves audio + transcribes + extracts in one shot
+            await runExtract(b64, mimeType);
           } catch (err: any) {
             toast({ title: "Processing failed", description: err?.message ?? "Could not process recording", variant: "destructive" });
           }
@@ -176,7 +179,7 @@ export default function MeetingsPage() {
         reader.onerror = () => toast({ title: "Could not read recording", variant: "destructive" });
         reader.readAsDataURL(blob);
       };
-      mr.start();
+      mr.start(100); // collect data every 100ms to ensure chunks are populated
       mediaRef.current = mr;
       setRecording(true);
     } catch {

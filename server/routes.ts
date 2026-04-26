@@ -859,7 +859,7 @@ export function registerRoutes(app: Express) {
       });
     } catch (err) {
       console.error("Minutes analysis failed:", err);
-      res.status(500).json({ error: "Analysis failed" });
+      res.status(500).json({ error: `Analysis failed: ${(err as any)?.message ?? err}` });
     }
   });
 
