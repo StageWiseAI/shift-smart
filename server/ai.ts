@@ -61,18 +61,23 @@ export async function analyseMinutes(minutesText: string): Promise<{
   hasRfi: boolean;
   rfis: Array<{ title: string; description: string; raisedBy: string | null }>;
 }> {
-  const prompt = `You are a construction project assistant. Analyse the following meeting minutes and return a JSON object with these fields:
+  const prompt = `You are a construction project assistant. Analyse the following meeting minutes or transcript and return a JSON object with these fields:
 
 - summary: 2-3 sentence plain-English summary of the meeting
 - decisions: array of decisions made during the meeting (strings)
-- actions: array of action items, each with: item (what needs to be done), owner (who is responsible, or null), due (due date in YYYY-MM-DD if mentioned, or null)
-- attendeesSuggested: array of names mentioned that appear to be attendees (if not already captured)
+- actions: array of action items. Each action MUST include:
+  - item: specific description of what needs to be done (be precise — include dates, amounts, locations mentioned)
+  - owner: full name of who is responsible if mentioned, otherwise null
+  - due: the due date or deadline in YYYY-MM-DD format if ANY date is mentioned in relation to this action — extract dates like "15th of May", "3rd of June", "end of week" etc. Use the current year (${new Date().getFullYear()}) if no year is stated. If no date is mentioned, use null.
+- attendeesSuggested: array of full names mentioned that appear to be attendees
 - hasRfi: true if any Requests for Information are raised or implied
 - rfis: array of RFI objects — each with title, description, raisedBy (or null). Empty array if none.
 
+IMPORTANT: Extract ALL specific dates, deadlines, and names mentioned. Do not generalise — if the transcript says "moving joinery to the 15th of May" the action item must say exactly that and due must be set to that date.
+
 Return ONLY valid JSON. No markdown, no explanation.
 
-MEETING MINUTES:
+MEETING MINUTES / TRANSCRIPT:
 ${minutesText}`;
 
   const response = await getOpenAI().chat.completions.create({
