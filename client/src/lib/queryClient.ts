@@ -1,9 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 
-// Detect if running deployed (port proxy) or local
-const API_BASE = (window as any).__PORT_5000__
-  ? (window as any).__PORT_5000__
-  : "";
+// API base — injected at deploy time by the build system, empty string for same-origin
+// __PORT_5000__ is replaced with the correct proxy path when deployed (Railway, AWS, etc.)
+const API_BASE: string = (window as any).__PORT_5000__ ?? "";
 
 export const queryClient = new QueryClient({
   defaultOptions: {

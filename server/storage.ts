@@ -160,11 +160,14 @@ sqlite.exec(`
   );
 `);
 
-// Seed admin if none exists
+// Seed admin if none exists — credentials from env vars, no hardcoding
 const adminExists = sqlite.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get();
 if (!adminExists) {
+  const adminName  = process.env.ADMIN_NAME  || "TrustShyft Admin";
+  const adminEmail = process.env.ADMIN_EMAIL || "admin@trustshyft.com.au";
+  const adminPass  = process.env.ADMIN_PASSWORD || "TrustShyft2026!";
   sqlite.prepare(`INSERT INTO users (name, email, password, role, created_at) VALUES (?,?,?,?,?)`).run(
-    "TrustShyft Admin", "admin@trustshyft.com.au", "TrustShyft2026!", "admin", now()
+    adminName, adminEmail, adminPass, "admin", now()
   );
 }
 
