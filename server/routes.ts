@@ -5,8 +5,11 @@ import { storage } from "./storage";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function parseXMLTasks(xml: string): any[] {
   const tasks: any[] = [];
+
+  // ── Format 1: MS Project XML (<Task> tags) ────────────────────────────────
   const taskRegex = /<Task>([\s\S]*?)<\/Task>/g;
   let match;
+  let msProjectCount = 0;
   while ((match = taskRegex.exec(xml)) !== null) {
     const block = match[1];
     const get = (tag: string) => {
@@ -15,16 +18,54 @@ function parseXMLTasks(xml: string): any[] {
     };
     const uid = get("UID");
     if (!uid || uid === "0") continue;
+    msProjectCount++;
     tasks.push({
       uid,
       name: get("Name") || "Unnamed",
       start: get("Start"),
       finish: get("Finish"),
       duration: get("Duration"),
+      percentComplete: parseFloat(get("PercentComplete") || "0"),
       isMilestone: get("Milestone") === "1",
       outlineLevel: parseInt(get("OutlineLevel") || "1"),
       wbsLevel: parseInt(get("WBS")?.split(".")?.length?.toString() || "1"),
       isSummary: get("Summary") === "1",
+    });
+  }
+  if (msProjectCount > 0) return tasks;
+
+  // ── Format 2: TrustShyft / Asta / custom Activity XML ────────────────────
+  const actRegex = /<Activity[^>]*>([\s\S]*?)<\/Activity>/g;
+  let seq = 0;
+  while ((match = actRegex.exec(xml)) !== null) {
+    const block = match[1];
+    const get = (tag: string) => {
+      const m = block.match(new RegExp(`<${tag}>([^<]*)<\/${tag}>`));
+      return m ? m[1].trim() : null;
+    };
+    const id = get("ActivityID") ?? get("ID") ?? String(++seq);
+    const name = get("ActivityName") ?? get("Name") ?? "Unnamed";
+    const start = get("Start") ?? get("StartDate");
+    const finish = get("Finish") ?? get("FinishDate") ?? get("End");
+    const isMilestone = get("Milestone") === "true" || get("Milestone") === "1";
+    const outlineLevel = parseInt(get("Level") ?? get("OutlineLevel") ?? "1");
+    const percentComplete = parseFloat(get("PercentComplete") ?? "0");
+    const remainingDuration = get("RemainingDuration");
+    const originalDuration = get("OriginalDuration");
+    const isCritical = get("CriticalOrMarked") === "true" || get("Critical") === "1";
+    tasks.push({
+      uid: id,
+      name,
+      start,
+      finish,
+      duration: originalDuration,
+      remainingDuration,
+      percentComplete,
+      isMilestone,
+      isCritical,
+      outlineLevel,
+      wbsLevel: outlineLevel,
+      isSummary: false,
     });
   }
   return tasks;
