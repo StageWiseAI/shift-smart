@@ -634,6 +634,11 @@ export function registerRoutes(app: Express) {
   });
 
   // ── Audit ─────────────────────────────────────────────────────────────────────
+  app.delete("/api/audit", requireAuth, requireAdmin, (_req, res) => {
+    sqlite.prepare("DELETE FROM audit_log").run();
+    res.json({ ok: true });
+  });
+
   app.get("/api/audit", requireAuth, requireAdmin, (req: any, res) => {
     const pid = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
     res.json(storage.getAuditLog(pid));

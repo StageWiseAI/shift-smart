@@ -142,11 +142,23 @@ export default function AdminPage() {
 
           {/* Audit */}
           <TabsContent value="audit">
-            <div className="mt-3 mb-3">
-              <div className="relative">
+            <div className="mt-3 mb-3 flex items-center gap-2">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                 <Input className="pl-8 h-8 text-xs" placeholder="Search by user, action, or detail…" value={auditSearch} onChange={e => setAuditSearch(e.target.value)} />
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs text-destructive border-destructive/40 hover:bg-destructive/10 shrink-0"
+                onClick={async () => {
+                  if (!confirm("Clear all audit log entries? This cannot be undone.")) return;
+                  await apiRequest("DELETE", "/api/audit");
+                  queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
+                }}
+              >
+                Clear Log
+              </Button>
             </div>
             <div className="border rounded-lg overflow-hidden">
               <table className="w-full text-sm">
