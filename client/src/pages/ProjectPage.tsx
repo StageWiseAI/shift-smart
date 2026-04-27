@@ -167,7 +167,7 @@ export default function ProjectPage() {
 
   return (
     <Layout projectId={pid} projectName={project.name}>
-      <div className="px-6 py-6 space-y-5 max-w-5xl">
+      <div className="px-4 py-4 md:px-6 md:py-6 space-y-5 max-w-5xl">
 
         {/* Project header */}
         <div>

@@ -104,7 +104,7 @@ export default function DashboardPage() {
 
   return (
     <Layout>
-      <div className="px-6 py-6">
+      <div className="px-4 py-4 md:px-6 md:py-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-bold">
@@ -216,7 +216,7 @@ export default function DashboardPage() {
                 required
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Contract Number</Label>
                 <Input
@@ -234,7 +234,7 @@ export default function DashboardPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Start Date</Label>
                 <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
@@ -270,7 +270,7 @@ export default function DashboardPage() {
                 data-testid="edit-project-name"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Contract Number</Label>
                 <Input
@@ -290,7 +290,7 @@ export default function DashboardPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Start Date</Label>
                 <Input

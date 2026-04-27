@@ -238,7 +238,7 @@ export default function MeetingsPage() {
   if (!meetingId) {
     return (
       <Layout projectId={pid} projectName={project?.name} breadcrumb="Meetings">
-        <div className="px-6 py-6">
+        <div className="px-4 py-4 md:px-6 md:py-6">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold">Meetings & Minutes</h1>
             <Button size="sm" onClick={() => setShowNew(true)}><Plus className="h-4 w-4 mr-1" /> New Meeting</Button>
@@ -337,7 +337,7 @@ export default function MeetingsPage() {
 
   return (
     <Layout projectId={pid} projectName={project?.name} breadcrumb="Meetings">
-      <div className="px-6 py-6 max-w-4xl">
+      <div className="px-4 py-4 md:px-6 md:py-6 max-w-4xl">
         {/* Header */}
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-start gap-3">

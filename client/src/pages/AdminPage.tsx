@@ -91,7 +91,7 @@ export default function AdminPage() {
 
   return (
     <Layout breadcrumb="Admin">
-      <div className="px-6 py-6">
+      <div className="px-4 py-4 md:px-6 md:py-6">
         <h1 className="text-xl font-bold mb-4">Administration</h1>
 
         <Tabs defaultValue="users">

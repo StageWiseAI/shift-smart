@@ -803,7 +803,7 @@ export default function ProgrammePage() {
 
   return (
     <Layout projectId={pid} projectName={project?.name} breadcrumb="Programme">
-      <div className="px-6 py-6">
+      <div className="px-4 py-4 md:px-6 md:py-6">
         {/* Page header */}
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -818,21 +818,24 @@ export default function ProgrammePage() {
             {activeProg && (
               <>
                 <Button size="sm" variant="outline" onClick={() => setShowLookahead(true)}>
-                  <Eye className="h-4 w-4 mr-1" /> Look-ahead
+                  <Eye className="h-4 w-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Look-ahead</span>
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setShowEOT(true)} title="Record a weather, IR or other delay that pushes the programme out">
-                  <CloudRain className="h-4 w-4 mr-1" /> Log a Delay
+                <Button size="sm" variant="outline" onClick={() => setShowEOT(true)}>
+                  <CloudRain className="h-4 w-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Log a Delay</span>
                 </Button>
                 {cycle && (
-                  <Button size="sm" variant="outline" onClick={() => setShowCycle(true)} title="See the programme side-by-side at a shorter cycle time">
-                    <RefreshCw className="h-4 w-4 mr-1" /> Acceleration Overlay
+                  <Button size="sm" variant="outline" onClick={() => setShowCycle(true)}>
+                    <RefreshCw className="h-4 w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Acceleration Overlay</span>
                   </Button>
                 )}
               </>
             )}
             <Button size="sm" onClick={() => fileRef.current?.click()} disabled={uploadMut.isPending}>
-              {uploadMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Upload className="h-4 w-4 mr-1" />}
-              Upload Programme
+              {uploadMut.isPending ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1" /> : <Upload className="h-4 w-4 sm:mr-1" />}
+              <span className="hidden sm:inline">Upload Programme</span>
             </Button>
             <input ref={fileRef} type="file" accept=".xml,.mpp" className="hidden" onChange={handleFileChange} />
           </div>
@@ -946,8 +949,8 @@ export default function ProgrammePage() {
                     )}
                   </div>
 
-                  <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
+                  <div className="border rounded-lg overflow-hidden overflow-x-auto">
+                    <table className="w-full text-sm min-w-[640px]">
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="py-2 px-3 text-left font-semibold text-muted-foreground text-xs">Activity</th>
