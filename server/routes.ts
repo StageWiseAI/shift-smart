@@ -635,7 +635,7 @@ export function registerRoutes(app: Express) {
 
   // ── Audit ─────────────────────────────────────────────────────────────────────
   app.delete("/api/audit", requireAuth, requireAdmin, (_req, res) => {
-    sqlite.prepare("DELETE FROM audit_log").run();
+    (storage as any).clearAuditLog();
     res.json({ ok: true });
   });
 

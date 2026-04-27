@@ -501,6 +501,9 @@ class SqliteStorage implements IStorage {
     if (projectId) return sqlite.prepare("SELECT * FROM audit_log WHERE project_id=? ORDER BY created_at DESC LIMIT 500").all(projectId) as any[];
     return sqlite.prepare("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 500").all() as any[];
   }
+  clearAuditLog() {
+    sqlite.prepare("DELETE FROM audit_log").run();
+  }
 }
 
 export const storage = new SqliteStorage();
