@@ -3,6 +3,7 @@ import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import Layout from "./Layout";
 import { useAuth } from "../App";
+import { InfoTip } from "@/components/InfoTip";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -904,11 +905,39 @@ export default function ProgrammePage() {
         ) : (
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="flex-wrap">
-              <TabsTrigger value="tasks">Tasks</TabsTrigger>
-              <TabsTrigger value="eot-log">Delay Log</TabsTrigger>
+              <TabsTrigger value="tasks" className="flex items-center gap-1">
+                Tasks
+                <InfoTip
+                  title="Tasks"
+                  content="This is your full construction programme — every activity, milestone, and summary task uploaded from your programme file. You can search for any task, see start and finish dates, track progress, and update completion percentages directly from here."
+                />
+              </TabsTrigger>
+              <TabsTrigger value="eot-log" className="flex items-center gap-1">
+                Delay Log
+                <InfoTip
+                  title="Delay Log"
+                  content="Use this to record any delays that have impacted your programme — such as wet weather, industrial action, or other unforeseen events. Each delay is logged with a date and number of hours, and the programme completion date is automatically pushed out to reflect it."
+                />
+              </TabsTrigger>
               {eotResult && <TabsTrigger value="eot-result">Delay Result</TabsTrigger>}
-              {cycleResult && <TabsTrigger value="cycle-overlay">Acceleration Overlay</TabsTrigger>}
-              {lookaheadResult && <TabsTrigger value="lookahead">Look-ahead</TabsTrigger>}
+              {cycleResult && (
+                <TabsTrigger value="cycle-overlay" className="flex items-center gap-1">
+                  Acceleration Overlay
+                  <InfoTip
+                    title="Acceleration Overlay"
+                    content="This shows what your programme would look like if you compressed the construction cycle — for example, moving from a 7-day cycle to a 5-day cycle. It helps you see which tasks could finish earlier and by how much if the team accelerates the pace of work."
+                  />
+                </TabsTrigger>
+              )}
+              {lookaheadResult && (
+                <TabsTrigger value="lookahead" className="flex items-center gap-1">
+                  Look-ahead
+                  <InfoTip
+                    title="Look-ahead"
+                    content="A look-ahead shows only the tasks starting within a set number of weeks from today. It's used in weekly site meetings to focus the team on what's coming up. You can filter by trade or section to show only the work relevant to a specific crew."
+                  />
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {/* ── Tasks tab ── */}

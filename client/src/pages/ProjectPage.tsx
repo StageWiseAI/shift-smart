@@ -2,6 +2,7 @@ import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import Layout from "./Layout";
+import { InfoTip } from "@/components/InfoTip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -197,6 +198,10 @@ export default function ProjectPage() {
                 <span className="flex items-center gap-2">
                   <CalendarDays className="h-4 w-4 text-blue-500" />
                   Programme Health
+                  <InfoTip
+                    title="Programme Health"
+                    content="This card shows the health of your construction programme. Critical tasks are those due within 30 days that are behind schedule or at risk. Monitor tasks are due within the next 14 days and need your attention to stay on track. The dates shown are when each task is due to finish."
+                  />
                 </span>
                 <Button
                   variant="ghost"
@@ -308,6 +313,10 @@ export default function ProjectPage() {
                 <span className="flex items-center gap-2">
                   <HardHat className="h-4 w-4 text-orange-500" />
                   Upcoming Pre-Starts
+                  <InfoTip
+                    title="Upcoming Pre-Starts"
+                    content="Pre-start meetings are held before work begins on site each day or for a new activity. They cover safety requirements, exclusion zones, and what work is planned. This card shows any pre-starts scheduled in the coming days."
+                  />
                 </span>
                 <Button
                   variant="ghost"
@@ -346,6 +355,10 @@ export default function ProjectPage() {
                 <span className="flex items-center gap-2">
                   <Truck className="h-4 w-4 text-amber-500" />
                   Deliveries — Next 7 Days
+                  <InfoTip
+                    title="Deliveries — Next 7 Days"
+                    content="Shows all material deliveries scheduled to arrive on site in the next 7 days. Keeping track of deliveries helps you plan site access, storage space, and labour. If a delivery changes, update it in the Materials section."
+                  />
                 </span>
                 <Button
                   variant="ghost"
@@ -389,6 +402,10 @@ export default function ProjectPage() {
                 <span className="flex items-center gap-2">
                   <ClipboardList className="h-4 w-4 text-green-500" />
                   Open Meeting Actions
+                  <InfoTip
+                    title="Open Meeting Actions"
+                    content="These are tasks that came out of your site meetings and haven't been marked as complete yet. Each action has an owner and a due date. When an action is done, mark it complete in the Meetings section so it clears from this list."
+                  />
                 </span>
                 <Button
                   variant="ghost"
@@ -435,6 +452,10 @@ export default function ProjectPage() {
                 <span className="flex items-center gap-2">
                   <FileQuestion className="h-4 w-4 text-violet-500" />
                   Open RFIs
+                  <InfoTip
+                    title="Open RFIs"
+                    content="An RFI (Request for Information) is a formal question raised when something on the drawings or specs isn't clear. This card shows RFIs that haven't been answered or closed yet. Unresolved RFIs can hold up work, so it's important to keep on top of them."
+                  />
                 </span>
                 <Button
                   variant="ghost"
