@@ -11,13 +11,41 @@ interface InfoTipProps {
 export function InfoTip({ title, content, className }: InfoTipProps) {
   const [open, setOpen] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Calculate position when opening
+  function calcPos() {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const popW = 288; // w-72
+    const padding = 12;
+    const viewW = window.innerWidth;
+
+    // Ideal: align right edge of popover with button
+    let left = rect.right - popW;
+    // Clamp within screen
+    if (left < padding) left = padding;
+    if (left + popW > viewW - padding) left = viewW - popW - padding;
+
+    const top = rect.bottom + 8 + window.scrollY;
+    setPos({ top, left });
+  }
+
+  function open_() {
+    calcPos();
+    setOpen(true);
+  }
 
   // Close on outside click
   useEffect(() => {
     if (!open) return;
     function handler(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      if (
+        popoverRef.current && !popoverRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
         stopSpeech();
       }
@@ -26,10 +54,7 @@ export function InfoTip({ title, content, className }: InfoTipProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Stop speech when closed
-  useEffect(() => {
-    if (!open) stopSpeech();
-  }, [open]);
+  useEffect(() => { if (!open) stopSpeech(); }, [open]);
 
   function stopSpeech() {
     if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -39,10 +64,7 @@ export function InfoTip({ title, content, className }: InfoTipProps) {
   }
 
   function toggleSpeech() {
-    if (speaking) {
-      stopSpeech();
-      return;
-    }
+    if (speaking) { stopSpeech(); return; }
     if (!window.speechSynthesis) return;
     stopSpeech();
     const utterance = new SpeechSynthesisUtterance(`${title}. ${content}`);
@@ -55,25 +77,23 @@ export function InfoTip({ title, content, className }: InfoTipProps) {
   }
 
   return (
-    <div className={cn("relative inline-flex items-center", className)} ref={popoverRef}>
+    <span className={cn("relative inline-flex items-center", className)}>
       <button
-        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+        ref={btnRef}
+        onClick={(e) => { e.stopPropagation(); open ? setOpen(false) : open_(); }}
         className="p-0.5 rounded-full text-muted-foreground/50 hover:text-muted-foreground transition-colors"
         aria-label={`Info: ${title}`}
       >
         <HelpCircle className="h-3.5 w-3.5" />
       </button>
 
-      {open && (
-        <div className={cn(
-          "absolute z-50 w-72 rounded-xl border border-border bg-card shadow-lg p-4",
-          "top-6 right-0",
-          // Prevent going off left edge on mobile
-          "max-w-[calc(100vw-2rem)]",
-        )}
-          style={{ right: 0 }}
+      {open && pos && (
+        <div
+          ref={popoverRef}
+          className="fixed z-[999] w-72 rounded-xl border border-border bg-card shadow-xl p-4"
+          style={{ top: pos.top, left: pos.left }}
+          onClick={e => e.stopPropagation()}
         >
-          {/* Header */}
           <div className="flex items-start justify-between gap-2 mb-2">
             <p className="text-sm font-semibold text-foreground leading-tight">{title}</p>
             <button
@@ -84,10 +104,8 @@ export function InfoTip({ title, content, className }: InfoTipProps) {
             </button>
           </div>
 
-          {/* Content */}
           <p className="text-xs text-muted-foreground leading-relaxed">{content}</p>
 
-          {/* Read aloud */}
           {typeof window !== "undefined" && "speechSynthesis" in window && (
             <button
               onClick={toggleSpeech}
@@ -106,6 +124,6 @@ export function InfoTip({ title, content, className }: InfoTipProps) {
           )}
         </div>
       )}
-    </div>
+    </span>
   );
 }
